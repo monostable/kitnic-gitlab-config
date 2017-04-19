@@ -10,7 +10,10 @@
 ##! URL on which GitLab will be reachable.
 ##! For more details on configuring external_url see:
 ##! https://docs.gitlab.com/omnibus/settings/configuration.html#configuring-the-external-url-for-gitlab
-external_url 'GENERATED_EXTERNAL_URL'
+external_url 'https://gitlab2.kitnic.it/gitlab'
+
+#for letsencrypt
+nginx['custom_gitlab_server_config'] = "location ^~ /.well-known { root /var/www/letsencrypt; }"
 
 ## Legend
 ##! The following notations at the beginning of each line may be used to
@@ -205,21 +208,28 @@ external_url 'GENERATED_EXTERNAL_URL'
 
 ### OmniAuth Settings
 ###! Docs: https://docs.gitlab.com/ce/integration/omniauth.html
-# gitlab_rails['omniauth_enabled'] = false
-# gitlab_rails['omniauth_allow_single_sign_on'] = ['saml']
+gitlab_rails['omniauth_enabled'] = true
+gitlab_rails['omniauth_allow_single_sign_on'] = ['twitter', 'github']
 # gitlab_rails['omniauth_auto_sign_in_with_provider'] = 'saml'
-# gitlab_rails['omniauth_block_auto_created_users'] = true
+gitlab_rails['omniauth_block_auto_created_users'] = false
 # gitlab_rails['omniauth_auto_link_ldap_user'] = false
 # gitlab_rails['omniauth_auto_link_saml_user'] = false
 # gitlab_rails['omniauth_external_providers'] = ['twitter', 'google_oauth2']
-# gitlab_rails['omniauth_providers'] = [
-#   {
-#     "name" => "google_oauth2",
-#     "app_id" => "YOUR APP ID",
-#     "app_secret" => "YOUR APP SECRET",
-#     "args" => { "access_type" => "offline", "approval_prompt" => "" }
-#   }
-# ]
+
+gitlab_rails['omniauth_providers'] = [
+  {
+    "name" => "twitter",
+    "app_id" => "NuABOeMtuUsBbA9tsDlbHrCjJ",
+    "app_secret" => 
+    #"args" => { "access_type" => "offline", "approval_prompt" => "" }
+  },
+  {
+    "name" => "github",
+    "app_id" => "36524d04ab4585ce6f07",
+    "app_secret" => 
+    #"args" => { "access_type" => "offline", "approval_prompt" => "" }
+  }
+]
 
 ### Backup Settings
 ###! Docs: https://docs.gitlab.com/omnibus/settings/backups.html
@@ -721,11 +731,13 @@ external_url 'GENERATED_EXTERNAL_URL'
 
 # nginx['enable'] = true
 # nginx['client_max_body_size'] = '250m'
-# nginx['redirect_http_to_https'] = false
+nginx['redirect_http_to_https'] = false
 # nginx['redirect_http_to_https_port'] = 80
 
 ##! Most root CA's are included by default
 # nginx['ssl_client_certificate'] = "/etc/gitlab/ssl/ca.crt"
+nginx['ssl_certificate'] = "/etc/letsencrypt/live/gitlab2.kitnic.it/fullchain.pem"
+nginx['ssl_certificate_key'] = "/etc/letsencrypt/live/gitlab2.kitnic.it/privkey.pem"
 
 ##! enable/disable 2-way SSL client authentication
 # nginx['ssl_verify_client'] = "off"
