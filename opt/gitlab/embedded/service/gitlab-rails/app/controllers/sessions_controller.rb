@@ -77,13 +77,9 @@ class SessionsController < Devise::SessionsController
 
   def store_redirect_path
     redirect_path =
-      if request.referer.present? && (params['redirect_to_referer'] == 'yes')
+      if request.referer.present?
         referer_uri = URI(request.referer)
-        if referer_uri.host == Gitlab.config.gitlab.host
-          referer_uri.request_uri
-        else
-          request.fullpath
-        end
+        referer_uri.path
       else
         request.fullpath
       end
