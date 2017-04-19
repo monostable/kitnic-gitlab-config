@@ -1,0 +1,8 @@
+- disable_initialization = local_assigns.fetch(:disable_initialization, false)
+#commit-pipeline-table-view{ data: { disable_initialization: disable_initialization,
+  endpoint: endpoint,
+} }
+
+- content_for :page_specific_javascripts do
+  = page_specific_javascript_bundle_tag('common_vue')
+  = page_specific_javascript_bundle_tag('commit_pipelines')

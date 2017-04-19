@@ -1,0 +1,85 @@
+.content-wrapper {
+  width: 100%;
+  transition: padding $sidebar-transition-duration;
+
+  .container-fluid {
+    background: $white-light;
+    padding: 0 $gl-padding;
+
+    &.container-blank {
+      background: none;
+      padding: 0;
+      border: none;
+    }
+  }
+}
+
+.nav-header-btn {
+  padding: 10px $gl-sidebar-padding;
+  color: inherit;
+  transition-duration: .3s;
+  position: absolute;
+  top: 0;
+  cursor: pointer;
+
+  &:hover,
+  &:focus {
+    color: $white-light;
+    text-decoration: none;
+  }
+}
+
+.right-sidebar-collapsed {
+  padding-right: 0;
+
+  @media (min-width: $screen-sm-min) {
+    .content-wrapper {
+      padding-right: $gutter_collapsed_width;
+    }
+
+    .merge-request-tabs-holder.affix {
+      right: $gutter_collapsed_width;
+    }
+  }
+
+  .sidebar-collapsed-icon {
+    cursor: pointer;
+
+    .btn {
+      background-color: $gray-light;
+    }
+  }
+}
+
+.right-sidebar-expanded {
+  padding-right: 0;
+
+  @media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
+    .content-wrapper {
+      padding-right: $gutter_collapsed_width;
+    }
+  }
+
+  @media (min-width: $screen-md-min) {
+    .content-wrapper {
+      padding-right: $gutter_width;
+    }
+
+    &:not(.with-overlay) .merge-request-tabs-holder.affix {
+      right: $gutter_width;
+    }
+
+    &.with-overlay .merge-request-tabs-holder.affix {
+      right: $gutter_collapsed_width;
+    }
+  }
+}
+
+.right-sidebar {
+  border-left: 1px solid $border-color;
+
+  &.affix {
+    position: fixed;
+    top: 0;
+  }
+}

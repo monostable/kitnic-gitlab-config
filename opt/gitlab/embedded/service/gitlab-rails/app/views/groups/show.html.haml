@@ -1,0 +1,20 @@
+- @no_container = true
+
+= content_for :meta_tags do
+  = auto_discovery_link_tag(:atom, group_url(@group, rss_url_options), title: "#{@group.name} activity")
+
+= render 'groups/head'
+= render 'groups/home_panel'
+
+
+.groups-header{ class: container_class }
+  .top-area
+    = render 'groups/show_nav'
+    .nav-controls
+      = render 'shared/projects/search_form'
+      = render 'shared/projects/dropdown'
+      - if can? current_user, :create_projects, @group
+        = link_to new_project_path(namespace_id: @group.id), class: 'btn btn-new pull-right' do
+          New Project
+
+  = render "projects", projects: @projects

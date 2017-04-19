@@ -1,0 +1,7 @@
+%ul.content-list.issues-list.issuable-list
+  = render partial: "projects/issues/issue", collection: @issues
+  - if @issues.blank?
+    = render 'shared/empty_states/issues'
+
+- if @issues.present?
+  = paginate @issues, theme: "gitlab"

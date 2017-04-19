@@ -1,0 +1,1 @@
+/var/opt/gitlab/gitlab-rails/etc/smtp_settings.rb

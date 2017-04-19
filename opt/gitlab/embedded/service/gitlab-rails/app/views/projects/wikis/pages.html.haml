@@ -1,0 +1,19 @@
+- @no_container = true
+- page_title "Pages", "Wiki"
+
+%div{ class: container_class }
+  .wiki-page-header
+
+    .nav-text
+      %h2.wiki-page-title
+        Wiki Pages
+
+    .nav-controls
+      = link_to namespace_project_wikis_git_access_path(@project.namespace, @project), class: 'btn' do
+        = icon('cloud-download')
+        Clone repository
+
+  %ul.wiki-pages-list.content-list
+    = render @wiki_entries, context: 'pages'
+
+  = paginate @wiki_pages, theme: 'gitlab'

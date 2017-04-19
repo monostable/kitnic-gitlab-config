@@ -1,0 +1,577 @@
+/**
+ * MR -> show: Automerge widget
+ *
+ */
+.mr-state-widget {
+  color: $gl-text-color;
+  border: 1px solid $border-color;
+  border-radius: 2px;
+
+  form {
+    margin-bottom: 0;
+
+    .clearfix {
+      margin-bottom: 0;
+    }
+  }
+
+  .accept-merge-holder {
+    .accept-action {
+      display: inline-block;
+      float: left;
+
+      .btn-success.dropdown-toggle .fa {
+        color: inherit;
+      }
+
+      .accept-merge-request {
+        &.ci-pending,
+        &.ci-running {
+          @include btn-blue;
+        }
+
+        &.ci-skipped,
+        &.ci-failed,
+        &.ci-canceled,
+        &.ci-error {
+          @include btn-red;
+        }
+      }
+
+      .dropdown-toggle {
+        .fa {
+          color: inherit;
+        }
+      }
+    }
+
+    .accept-control {
+      display: inline-block;
+      float: left;
+      margin: 0;
+      margin-left: 20px;
+      padding: 5px;
+      padding-top: 8px;
+      line-height: 20px;
+
+      &.right {
+        float: right;
+        padding-right: 0;
+      }
+
+      .modify-merge-commit-link {
+        color: $gl-text-color;
+      }
+
+      .merge-param-checkbox {
+        margin: 0;
+      }
+
+      a .fa-question-circle {
+        color: $gl-text-color-secondary;
+
+        &:hover,
+        &:focus {
+          color: $link-hover-color;
+        }
+      }
+    }
+  }
+
+  .ci_widget {
+    border-bottom: 1px solid $well-inner-border;
+    color: $gl-text-color;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+
+    i,
+    svg {
+      margin-right: 8px;
+    }
+
+    svg {
+      position: relative;
+      top: 1px;
+      overflow: visible;
+    }
+
+    & > span {
+      padding-right: 4px;
+    }
+
+    @media (max-width: $screen-xs-max) {
+      flex-wrap: wrap;
+    }
+
+    .ci-status-icon > .icon-link > svg {
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  .mr-widget-body,
+  .ci_widget,
+  .mr-widget-footer {
+    padding: 16px;
+  }
+
+  .mr-widget-pipeline-graph {
+    flex-shrink: 0;
+
+    .dropdown-menu {
+      margin-top: 11px;
+    }
+
+    .ci-action-icon-wrapper {
+      line-height: 16px;
+    }
+
+    @media (min-width: $screen-sm-min) {
+      .stage-cell {
+        padding: 0 4px;
+      }
+    }
+
+    @media (max-width: $screen-xs-max) {
+      order: 1;
+      margin-top: $gl-padding-top;
+      border-radius: 3px;
+      background-color: $white-light;
+      border: 1px solid $gray-darker;
+      width: 100%;
+      text-align: center;
+
+      .dropdown-menu {
+        margin-left: -97.5px;
+      }
+
+      .arrow-up::before,
+      .arrow-up::after, {
+        margin-left: 97.5px;
+      }
+    }
+  }
+
+  .normal {
+    color: $gl-text-color;
+  }
+
+  .js-deployment-link {
+    display: inline-block;
+  }
+
+  .mr-widget-body {
+    h4 {
+      font-weight: 600;
+      font-size: 16px;
+      margin: 5px 0;
+      color: $gl-text-color;
+
+      &.has-conflicts .fa-exclamation-triangle {
+        color: $gl-warning;
+      }
+    }
+
+    .btn-grouped {
+      margin-left: 0;
+      margin-right: 7px;
+    }
+
+    @media (max-width: $screen-xs-max) {
+      h4 {
+        font-size: 14px;
+      }
+
+      p {
+        font-size: 13px;
+      }
+
+      .btn,
+      .btn-group,
+      .accept-action {
+        margin-bottom: 4px;
+      }
+
+      .btn-grouped {
+        float: none;
+        margin-right: 0;
+      }
+
+      .accept-action {
+        width: 100%;
+        text-align: center;
+      }
+
+      .accept-control {
+        width: 100%;
+        text-align: center;
+        margin: 0;
+      }
+    }
+  }
+
+  .mr-widget-footer {
+    border-top: 1px solid $gray-darker;
+  }
+
+  .ci-coverage {
+    float: right;
+  }
+
+  .stop-env-container {
+    color: $gl-text-color;
+    float: right;
+
+    a {
+      color: $gl-text-color;
+    }
+  }
+}
+
+.mr_source_commit,
+.mr_target_commit {
+  margin-bottom: 0;
+
+  .commit {
+    margin: 0;
+    padding: 10px 0;
+    list-style: none;
+
+    &:hover {
+      background: none;
+    }
+  }
+}
+
+.label-branch {
+  color: $gl-text-color;
+  font-family: $monospace_font;
+  font-weight: bold;
+  overflow: hidden;
+  font-size: 90%;
+  margin: 0 3px;
+  word-break: break-all;
+}
+
+.commits-empty {
+  text-align: center;
+
+  h4 {
+    padding-top: 20px;
+    padding-bottom: 10px;
+  }
+
+  svg {
+    width: 230px;
+  }
+}
+
+.mr-list {
+  .merge-request {
+    padding: 10px  0 10px 15px;
+    position: relative;
+    display: -webkit-flex;
+    display: flex;
+
+    .issue-info-container {
+      -webkit-flex: 1;
+      flex: 1;
+    }
+
+    .merge-request-title {
+      margin-bottom: 2px;
+
+      .ci-status-link {
+
+        svg {
+          height: 16px;
+          width: 16px;
+          position: relative;
+          top: 3px;
+        }
+
+        &:hover,
+        &:focus {
+          text-decoration: none;
+        }
+      }
+    }
+  }
+
+  .merge-request-labels {
+    display: inline-block;
+  }
+}
+
+.merge-request-angle {
+  text-align: center;
+  margin: 0 auto;
+  font-size: 2em;
+  line-height: 1.1;
+}
+
+// hide mr close link for inline diff comment form
+.diff-file .close-mr-link,
+.diff-file .reopen-mr-link {
+  display: none;
+}
+
+#modal_merge_info .modal-dialog {
+  width: 600px;
+
+  .dark {
+    margin-right: 40px;
+  }
+
+  .btn-clipboard {
+    @extend .pull-right;
+
+    margin-right: 20px;
+    margin-top: 5px;
+    position: absolute;
+    right: 0;
+  }
+}
+
+.remove-message-pipes {
+  ul {
+    margin: 10px 0 0 12px;
+    padding: 0;
+    list-style: none;
+    border-left: 2px solid $border-color;
+    display: inline-block;
+  }
+
+  li {
+    position: relative;
+    margin: 0;
+    padding: 0;
+    display: block;
+
+    span {
+      margin-left: 15px;
+      max-height: 20px;
+    }
+  }
+
+  li::before {
+    content: '';
+    position: absolute;
+    border-top: 2px solid $border-color;
+    height: 1px;
+    top: 8px;
+    width: 8px;
+  }
+
+  li:last-child {
+    &::before {
+      top: 18px;
+    }
+
+    span {
+      display: block;
+      position: relative;
+      top: 5px;
+      margin-top: 5px;
+    }
+  }
+}
+
+.mr-source-target {
+  background-color: $gray-light;
+  line-height: 31px;
+  border-style: solid;
+  border-width: 1px;
+  border-color: $border-color;
+  border-top-right-radius: 3px;
+  border-top-left-radius: 3px;
+  border-bottom: none;
+  padding: 16px;
+  margin-bottom: -1px;
+}
+
+.panel-new-merge-request {
+  .panel-heading {
+    padding: 5px 10px;
+    font-weight: 600;
+    line-height: 25px;
+  }
+
+  .panel-body {
+    padding: 10px 5px;
+  }
+
+  .panel-footer {
+    padding: 0;
+
+    .btn {
+      min-width: auto;
+    }
+  }
+
+  .commit {
+    .commit-row-title {
+      margin-bottom: 4px;
+    }
+
+    .item-title {
+      @media (min-width: $screen-sm-min) {
+        width: 45%;
+      }
+    }
+
+    .avatar {
+      left: 0;
+      top: 2px;
+    }
+  }
+
+  .btn-clipboard {
+    margin-right: 5px;
+    padding: 0;
+    background: transparent;
+  }
+
+  .ci-status-link {
+    margin-right: 5px;
+  }
+}
+
+.merge-request-select {
+  padding-left: 5px;
+  padding-right: 5px;
+  margin-bottom: 10px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  @media (min-width: $screen-xs-min) {
+    float: left;
+    width: 50%;
+    margin-bottom: 0;
+  }
+
+  .dropdown-menu-toggle {
+    width: 100%;
+  }
+
+  .dropdown-menu {
+    left: 5px;
+    right: 5px;
+    width: auto;
+  }
+}
+
+.issuable-form-select-holder {
+  display: inline-block;
+  width: 250px;
+
+  .dropdown-menu-toggle {
+    width: 100%;
+  }
+}
+
+.assign-to-me-link {
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+.table-holder {
+  .ci-table {
+
+    th {
+      background-color: $white-light;
+      color: $gl-text-color-secondary;
+    }
+  }
+}
+
+.merged-buttons {
+  margin-top: 20px;
+
+  .btn {
+    float: left;
+
+    &:not(:last-child) {
+      margin-right: 10px;
+    }
+  }
+}
+
+.mr-version-controls {
+  background: $gray-light;
+  border-bottom: 1px solid $border-color;
+  color: $gl-text-color;
+
+  .mr-version-menus-container {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    padding: 16px;
+  }
+
+  .content-block {
+    border-top: 1px solid $border-color;
+    padding: $gl-padding-top $gl-padding;
+  }
+
+  .comments-disabled-notif {
+    .btn {
+      margin-left: 5px;
+    }
+  }
+
+  .mr-version-dropdown,
+  .mr-version-compare-dropdown {
+    margin: 0 7px;
+  }
+
+  .dropdown-title {
+    color: $gl-text-color;
+  }
+
+  .fa-info-circle {
+    color: $orange-normal;
+    padding-right: 5px;
+  }
+}
+
+.merge-request-tabs-holder {
+  background-color: $white-light;
+
+  &.affix {
+    top: 0;
+    left: 0;
+    z-index: 10;
+    transition: right .15s;
+
+    @media (max-width: $screen-xs-max) {
+      right: 0;
+    }
+
+    .merge-request-tabs-container {
+      padding-left: $gl-padding;
+      padding-right: $gl-padding;
+    }
+  }
+}
+
+.limit-container-width {
+  .merge-request-tabs-container {
+    max-width: $limited-layout-width;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+.limit-container-width:not(.container-limited) {
+  .merge-request-tabs-holder:not(.affix) {
+    .merge-request-tabs-container {
+      max-width: $limited-layout-width - ($gl-padding * 2);
+    }
+  }
+}
