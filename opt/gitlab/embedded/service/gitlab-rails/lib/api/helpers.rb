@@ -392,7 +392,7 @@ module API
 
     # Check the Rails session for valid authentication details
     def find_user_from_warden
-      warden.try(:authenticate) if verified_request?
+      warden.try(:authenticate)
     end
 
     def initial_current_user
