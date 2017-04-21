@@ -1,17 +1,10 @@
 !!! 5
 %html{ lang: "en" }
-  = render "layouts/head"
+  = render "layouts/kitnic_head"
   %body.ui_charcoal.login-page.application.navless
-    = render "layouts/header/empty"
+    = render "layouts/header/kitnic"
     = render "layouts/broadcast"
     .container.navless-container
       .content
         = render "layouts/flash"
         = yield
-
-    %hr
-    .container
-      .footer-links
-        = link_to "Explore", explore_root_path
-        = link_to "Help", help_path
-        = link_to "About GitLab", "https://about.gitlab.com/"
