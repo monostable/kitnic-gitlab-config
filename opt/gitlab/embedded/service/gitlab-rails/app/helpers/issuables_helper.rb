@@ -1,4 +1,6 @@
 module IssuablesHelper
+  include GitlabRoutingHelper
+
   def sidebar_gutter_toggle_icon
     sidebar_gutter_collapsed? ? icon('angle-double-left', { 'aria-hidden': 'true' }) : icon('angle-double-right', { 'aria-hidden': 'true' })
   end
@@ -35,7 +37,10 @@ module IssuablesHelper
     when Issue
       IssueSerializer.new.represent(issuable).to_json
     when MergeRequest
-      MergeRequestSerializer.new.represent(issuable).to_json
+      MergeRequestSerializer
+        .new(current_user: current_user, project: issuable.project)
+        .represent(issuable)
+        .to_json
     end
   end
 
@@ -58,6 +63,17 @@ module IssuablesHelper
 
     dropdown_tag(title, options: options) do
       capture(&block)
+    end
+  end
+
+  def users_dropdown_label(selected_users)
+    case selected_users.length
+    when 0
+      "Unassigned"
+    when 1
+      selected_users[0].name
+    else
+      "#{selected_users[0].name} + #{selected_users.length - 1} more"
     end
   end
 
@@ -98,8 +114,23 @@ module IssuablesHelper
     h(title || default_label)
   end
 
+  def to_url_reference(issuable)
+    case issuable
+    when Issue
+      link_to issuable.to_reference, issue_url(issuable)
+    when MergeRequest
+      link_to issuable.to_reference, merge_request_url(issuable)
+    else
+      issuable.to_reference
+    end
+  end
+
   def issuable_meta(issuable, project, text)
-    output = content_tag :strong, "#{text} #{issuable.to_reference}", class: "identifier"
+    output = content_tag(:strong, class: "identifier") do
+      concat("#{text} ")
+      concat(to_url_reference(issuable))
+    end
+
     output << " opened #{time_ago_with_tooltip(issuable.created_at)} by ".html_safe
     output << content_tag(:strong) do
       author_output = link_to_member(project, issuable.author, size: 24, mobile_classes: "hidden-xs", tooltip: true)
@@ -148,11 +179,8 @@ module IssuablesHelper
     html.html_safe
   end
 
-  def cached_assigned_issuables_count(assignee, issuable_type, state)
-    cache_key = hexdigest(['assigned_issuables_count', assignee.id, issuable_type, state].join('-'))
-    Rails.cache.fetch(cache_key, expires_in: 2.minutes) do
-      assigned_issuables_count(assignee, issuable_type, state)
-    end
+  def assigned_issuables_count(issuable_type)
+    current_user.public_send("assigned_open_#{issuable_type}_count")
   end
 
   def issuable_filter_params
@@ -174,10 +202,6 @@ module IssuablesHelper
   end
 
   private
-
-  def assigned_issuables_count(assignee, issuable_type, state)
-    assignee.public_send("assigned_#{issuable_type}").public_send(state).count
-  end
 
   def sidebar_gutter_collapsed?
     cookies[:collapsed_gutter] == 'true'
@@ -235,5 +259,20 @@ module IssuablesHelper
 
   def selected_template(issuable)
     params[:issuable_template] if issuable_templates(issuable).any?{ |template| template[:name] == params[:issuable_template] }
+  end
+
+  def issuable_todo_button_data(issuable, todo, is_collapsed)
+    {
+      todo_text: "Add todo",
+      mark_text: "Mark done",
+      todo_icon: (is_collapsed ? icon('plus-square') : nil),
+      mark_icon: (is_collapsed ? icon('check-square', class: 'todo-undone') : nil),
+      issuable_id: issuable.id,
+      issuable_type: issuable.class.name.underscore,
+      url: namespace_project_todos_path(@project.namespace, @project),
+      delete_path: (dashboard_todo_path(todo) if todo),
+      placement: (is_collapsed ? 'left' : nil),
+      container: (is_collapsed ? 'body' : nil)
+    }
   end
 end

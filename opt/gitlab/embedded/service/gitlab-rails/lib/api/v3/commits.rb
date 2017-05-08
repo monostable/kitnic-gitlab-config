@@ -11,7 +11,7 @@ module API
       params do
         requires :id, type: String, desc: 'The ID of a project'
       end
-      resource :projects do
+      resource :projects, requirements: { id: %r{[^/]+} } do
         desc 'Get a project repository commits' do
           success ::API::Entities::RepoCommit
         end
@@ -53,7 +53,7 @@ module API
 
           attrs = declared_params.dup
           branch = attrs.delete(:branch_name)
-          attrs.merge!(branch: branch, start_branch: branch, target_branch: branch)
+          attrs.merge!(start_branch: branch, branch_name: branch)
 
           result = ::Files::MultiService.new(user_project, current_user, attrs).execute
 
@@ -131,7 +131,7 @@ module API
           commit_params = {
             commit: commit,
             start_branch: params[:branch],
-            target_branch: params[:branch]
+            branch_name: params[:branch]
           }
 
           result = ::Commits::CherryPickService.new(user_project, current_user, commit_params).execute

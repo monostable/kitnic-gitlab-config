@@ -14,14 +14,32 @@
   }
 }
 
+@mixin set-visible {
+  transform: translateY(0);
+  visibility: visible;
+  opacity: 1;
+  transition-duration: 100ms, 150ms, 25ms;
+  transition-delay: 35ms, 50ms, 25ms;
+}
+
+@mixin set-invisible {
+  transform: translateY(-10px);
+  visibility: hidden;
+  opacity: 0;
+  transition-property: opacity, transform, visibility;
+  transition-duration: 70ms, 250ms, 250ms;
+  transition-timing-function: linear, $dropdown-animation-timing;
+  transition-delay: 25ms, 50ms, 0ms;
+}
+
 .open {
   .dropdown-menu,
   .dropdown-menu-nav {
     display: block;
+    @include set-visible;
 
     @media (max-width: $screen-xs-max) {
       width: 100%;
-      min-width: 240px;
     }
   }
 
@@ -119,10 +137,51 @@
   }
 }
 
+@mixin dropdown-link {
+  display: block;
+  position: relative;
+  padding: 5px 8px;
+  color: $gl-text-color;
+  line-height: initial;
+  text-overflow: ellipsis;
+  border-radius: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+
+  &:hover,
+  &:focus,
+  &.is-focused {
+    background-color: $dropdown-link-hover-bg;
+    text-decoration: none;
+
+    .badge {
+      background-color: darken($dropdown-link-hover-bg, 5%);
+    }
+  }
+
+  &.dropdown-menu-empty-link {
+    &.is-focused {
+      background-color: $dropdown-empty-row-bg;
+    }
+  }
+
+  &.dropdown-menu-user-link {
+    line-height: 16px;
+  }
+
+  .icon-play {
+    fill: $gl-text-color-secondary;
+    margin-right: 6px;
+    height: 12px;
+    width: 11px;
+  }
+}
+
 .dropdown-menu,
 .dropdown-menu-nav {
-  display: none;
+  display: block;
   position: absolute;
+  width: 100%;
   top: 100%;
   left: 0;
   z-index: 9;
@@ -136,9 +195,10 @@
   border: 1px solid $dropdown-border-color;
   border-radius: $border-radius-base;
   box-shadow: 0 2px 4px $dropdown-shadow-color;
+  @include set-invisible;
 
-  .filtered-search-input-container & {
-    max-width: 280px;
+  @media (max-width: $screen-sm-min) {
+    width: 100%;
   }
 
   &.is-loading {
@@ -151,6 +211,15 @@
     }
   }
 
+  .shortcut-mappings {
+    display: none;
+  }
+
+  &.shortcuts .shortcut-mappings {
+    display: inline-block;
+    margin-right: 5px;
+  }
+
   ul {
     margin: 0;
     padding: 0;
@@ -159,12 +228,12 @@
   li {
     text-align: left;
     list-style: none;
-    padding: 0 8px;
+    padding: 0 10px;
   }
 
   .divider {
     height: 1px;
-    margin: 8px;
+    margin: 6px 10px;
     padding: 0;
     background-color: $dropdown-divider-color;
   }
@@ -178,51 +247,18 @@
   }
 
   a {
-    display: block;
-    position: relative;
-    padding: 5px 8px;
-    color: $dropdown-link-color;
-    line-height: initial;
-    text-overflow: ellipsis;
-    border-radius: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-
-    &:hover,
-    &:focus,
-    &.is-focused {
-      background-color: $dropdown-link-hover-bg;
-      text-decoration: none;
-
-      .badge {
-        background-color: darken($row-hover, 5%);
-      }
-    }
-
-    &.dropdown-menu-empty-link {
-      &.is-focused {
-        background-color: $dropdown-empty-row-bg;
-      }
-    }
-
-    &.dropdown-menu-user-link {
-      line-height: 16px;
-    }
-
-    .icon-play {
-      fill: $gl-text-color-secondary;
-      margin-right: 6px;
-      height: 12px;
-      width: 11px;
-    }
+    @include dropdown-link;
   }
 
   .dropdown-header {
     color: $gl-text-color-secondary;
     font-size: 13px;
     line-height: 22px;
+    padding: 0 16px;
+  }
+
+  &.capitalize-header .dropdown-header {
     text-transform: capitalize;
-    padding: 0 10px;
   }
 
   .separator + .dropdown-header {
@@ -239,6 +275,23 @@
     position: absolute;
     right: 8px;
     top: 5px;
+  }
+}
+
+.filtered-search-box-input-container .dropdown-menu,
+.filtered-search-box-input-container .dropdown-menu-nav,
+.comment-type-dropdown .dropdown-menu {
+  display: none;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.filtered-search-box-input-container {
+  .dropdown-menu,
+  .dropdown-menu-nav {
+    max-width: 280px;
+    width: auto;
   }
 }
 
@@ -286,8 +339,8 @@
 .dropdown-menu-user {
   .avatar {
     float: left;
-    width: 30px;
-    height: 30px;
+    width: 2 * $gl-padding;
+    height: 2 * $gl-padding;
     margin: 0 10px 0 0;
   }
 }
@@ -316,6 +369,10 @@
 
 .dropdown-select {
   width: $dropdown-width;
+
+  @media (max-width: $screen-sm-min) {
+    width: 100%;
+  }
 }
 
 .dropdown-menu-align-right {
@@ -325,14 +382,19 @@
 
 .dropdown-menu-selectable {
   a {
-    padding-left: 25px;
+    padding-left: 26px;
+    position: relative;
 
     &.is-indeterminate,
     &.is-active {
+      font-weight: 600;
+      color: $gl-text-color;
+
       &::before {
         position: absolute;
-        left: 5px;
-        top: 8px;
+        left: 6px;
+        top: 50%;
+        transform: translateY(-50%);
         font: normal normal normal 14px/1 FontAwesome;
         font-size: inherit;
         text-rendering: auto;
@@ -347,6 +409,9 @@
 
     &.is-active::before {
       content: "\f00c";
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
     }
   }
 }
@@ -354,7 +419,7 @@
 
 .dropdown-title {
   position: relative;
-  padding: 0 25px 10px;
+  padding: 2px 25px 10px;
   margin: 0 10px 10px;
   font-weight: 600;
   line-height: 1;
@@ -384,7 +449,7 @@
   right: 5px;
   width: 20px;
   height: 20px;
-  top: -3px;
+  top: -1px;
 }
 
 .dropdown-menu-back {
@@ -457,6 +522,11 @@
 .dropdown-content {
   max-height: 215px;
   overflow-y: auto;
+}
+
+.dropdown-info-note {
+  color: $gl-text-color-secondary;
+  text-align: center;
 }
 
 .dropdown-footer {
@@ -545,4 +615,29 @@
   &.is-default {
     color: $gl-text-color-secondary;
   }
+}
+
+.droplab-item-ignore {
+  pointer-events: none;
+}
+
+.pika-single.animate-picker.is-bound,
+.pika-single.animate-picker.is-bound.is-hidden {
+  /*
+   * Having `!important` is not recommended but
+   * since `pikaday` sets positioning inline
+   * there's no way it can be gracefully overridden
+   * using config options.
+   */
+  position: absolute !important;
+  display: block;
+}
+
+.pika-single.animate-picker.is-bound {
+  @include set-visible;
+}
+
+.pika-single.animate-picker.is-bound.is-hidden {
+  @include set-invisible;
+  overflow: hidden;
 }

@@ -48,8 +48,8 @@ module Boards
       end
 
       def issue_state
-        return 'reopen' if moving_from_list.done?
-        return 'close'  if moving_to_list.done?
+        return 'reopen' if moving_from_list.closed?
+        return 'close'  if moving_to_list.closed?
       end
 
       def add_label_ids
@@ -61,7 +61,7 @@ module Boards
           if moving_to_list.movable?
             moving_from_list.label_id
           else
-            project.boards.joins(:lists).merge(List.movable).pluck(:label_id)
+            Label.on_project_boards(project.id).pluck(:label_id)
           end
 
         Array(label_ids).compact

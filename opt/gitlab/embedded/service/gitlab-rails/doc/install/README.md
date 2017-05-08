@@ -20,8 +20,10 @@ the hardware requirements.
 - [Docker](https://docs.gitlab.com/omnibus/docker/) - Install GitLab using Docker.
 - [Installation on Google Cloud Platform](google_cloud_platform/index.md) - Install
   GitLab on Google Cloud Platform using our official image.
-- [Digital Ocean and Docker](digitaloceandocker.md) - Install GitLab quickly
-  on DigitalOcean using Docker.
+- [Installing in Kubernetes](kubernetes/index.md) - Install GitLab into a Kubernetes
+  Cluster using our official Helm Chart Repository.
+- Testing only! [DigitalOcean and Docker Machine](digitaloceandocker.md) -
+  Quickly test any version of GitLab on DigitalOcean using Docker Machine.
 
 ## Database
 

@@ -4,14 +4,12 @@
 /* global ShortcutsNavigation */
 /* global Build */
 /* global Issuable */
-/* global Issue */
 /* global ShortcutsIssuable */
 /* global ZenMode */
 /* global Milestone */
 /* global IssuableForm */
 /* global LabelsSelect */
 /* global MilestoneSelect */
-/* global MergedButtons */
 /* global Commit */
 /* global NotificationsForm */
 /* global TreeView */
@@ -25,7 +23,6 @@
 /* global Search */
 /* global Admin */
 /* global NamespaceSelects */
-/* global ShortcutsDashboardNavigation */
 /* global Project */
 /* global ProjectAvatar */
 /* global CompareAutocomplete */
@@ -34,13 +31,29 @@
 /* global ProjectShow */
 /* global Labels */
 /* global Shortcuts */
+/* global Sidebar */
+/* global ShortcutsWiki */
+
+import Issue from './issue';
 
 import BindInOut from './behaviors/bind_in_out';
+import Group from './group';
+import GroupName from './group_name';
 import GroupsList from './groups_list';
 import ProjectsList from './projects_list';
+import MiniPipelineGraph from './mini_pipeline_graph_dropdown';
+import BlobLinePermalinkUpdater from './blob/blob_line_permalink_updater';
+import Landing from './landing';
+import BlobForkSuggestion from './blob/blob_fork_suggestion';
+import UserCallout from './user_callout';
+import { ProtectedTagCreate, ProtectedTagEditList } from './protected_tags';
+import ShortcutsWiki from './shortcuts_wiki';
+import Pipelines from './pipelines';
+import BlobViewer from './blob/viewer/index';
+import AutoWidthDropdownSelect from './issuable/auto_width_dropdown_select';
+import RefSelectDropdown from './ref_select_dropdown';
 
 const ShortcutsBlob = require('./shortcuts_blob');
-const UserCallout = require('./user_callout');
 
 (function() {
   var Dispatcher;
@@ -57,13 +70,41 @@ const UserCallout = require('./user_callout');
     }
 
     Dispatcher.prototype.initPageScripts = function() {
-      var page, path, shortcut_handler;
+      var page, path, shortcut_handler, fileBlobPermalinkUrlElement, fileBlobPermalinkUrl;
       page = $('body').attr('data-page');
       if (!page) {
         return false;
       }
       path = page.split(':');
       shortcut_handler = null;
+
+      function initBlob() {
+        new LineHighlighter();
+
+        new BlobLinePermalinkUpdater(
+          document.querySelector('#blob-content-holder'),
+          '.diff-line-num[data-line-number]',
+          document.querySelectorAll('.js-data-file-blob-permalink-url, .js-blob-blame-link'),
+        );
+
+        shortcut_handler = new ShortcutsNavigation();
+        fileBlobPermalinkUrlElement = document.querySelector('.js-data-file-blob-permalink-url');
+        fileBlobPermalinkUrl = fileBlobPermalinkUrlElement && fileBlobPermalinkUrlElement.getAttribute('href');
+        new ShortcutsBlob({
+          skipResetBindings: true,
+          fileBlobPermalinkUrl,
+        });
+
+        new BlobForkSuggestion({
+          openButtons: document.querySelectorAll('.js-edit-blob-link-fork-toggler'),
+          forkButtons: document.querySelectorAll('.js-fork-suggestion-button'),
+          cancelButtons: document.querySelectorAll('.js-cancel-fork-suggestion-button'),
+          suggestionSections: document.querySelectorAll('.js-file-fork-suggestion-section'),
+          actionTextPieces: document.querySelectorAll('.js-file-fork-suggestion-section-action'),
+        })
+          .init();
+      }
+
       switch (page) {
         case 'sessions:new':
           new UsernameValidator();
@@ -96,6 +137,7 @@ const UserCallout = require('./user_callout');
         case 'groups:milestones:show':
         case 'dashboard:milestones:show':
           new Milestone();
+          new Sidebar();
           break;
         case 'dashboard:todos:index':
           new gl.Todos();
@@ -109,18 +151,29 @@ const UserCallout = require('./user_callout');
           new ProjectsList();
           break;
         case 'dashboard:groups:index':
+          new GroupsList();
+          break;
         case 'explore:groups:index':
           new GroupsList();
+
+          const landingElement = document.querySelector('.js-explore-groups-landing');
+          if (!landingElement) break;
+          const exploreGroupsLanding = new Landing(
+            landingElement,
+            landingElement.querySelector('.dismiss-button'),
+            'explore_groups_landing_dismissed',
+          );
+          exploreGroupsLanding.toggle();
           break;
         case 'projects:milestones:new':
         case 'projects:milestones:edit':
         case 'projects:milestones:update':
+        case 'groups:milestones:new':
+        case 'groups:milestones:edit':
+        case 'groups:milestones:update':
           new ZenMode();
           new gl.DueDateSelectors();
           new gl.GLForm($('.milestone-form'));
-          break;
-        case 'groups:milestones:new':
-          new ZenMode();
           break;
         case 'projects:compare:show':
           new gl.Diff();
@@ -147,10 +200,12 @@ const UserCallout = require('./user_callout');
           new LabelsSelect();
           new MilestoneSelect();
           new gl.IssuableTemplateSelectors();
+          new AutoWidthDropdownSelect($('.js-target-branch-select')).init();
           break;
         case 'projects:tags:new':
           new ZenMode();
           new gl.GLForm($('.tag-form'));
+          new RefSelectDropdown($('.js-branch-select'), window.gl.availableRefs);
           break;
         case 'projects:releases:edit':
           new ZenMode();
@@ -160,15 +215,10 @@ const UserCallout = require('./user_callout');
           new gl.Diff();
           shortcut_handler = new ShortcutsIssuable(true);
           new ZenMode();
-          new MergedButtons();
-          break;
-        case 'projects:merge_requests:commits':
-          new MergedButtons();
           break;
         case "projects:merge_requests:diffs":
           new gl.Diff();
           new ZenMode();
-          new MergedButtons();
           break;
         case 'dashboard:activity':
           new gl.Activities();
@@ -178,10 +228,13 @@ const UserCallout = require('./user_callout');
           new gl.Diff();
           new ZenMode();
           shortcut_handler = new ShortcutsNavigation();
+          new MiniPipelineGraph({
+            container: '.js-commit-pipeline-graph',
+          }).bindEvents();
           break;
         case 'projects:commit:pipelines':
-          new gl.MiniPipelineGraph({
-            container: '.js-pipeline-table',
+          new MiniPipelineGraph({
+            container: '.js-commit-pipeline-graph',
           }).bindEvents();
           break;
         case 'projects:commits:show':
@@ -196,11 +249,14 @@ const UserCallout = require('./user_callout');
           }
           break;
         case 'projects:pipelines:builds':
+        case 'projects:pipelines:failures':
         case 'projects:pipelines:show':
           const { controllerAction } = document.querySelector('.js-pipeline-container').dataset;
+          const pipelineStatusUrl = `${document.querySelector('.js-pipeline-tab-link a').getAttribute('href')}/status.json`;
 
-          new gl.Pipelines({
+          new Pipelines({
             initTabs: true,
+            pipelineStatusUrl,
             tabsOptions: {
               action: controllerAction,
               defaultAction: 'pipelines',
@@ -234,8 +290,9 @@ const UserCallout = require('./user_callout');
         case 'groups:create':
         case 'admin:groups:create':
           BindInOut.initAll();
-        case 'groups:new':
-        case 'admin:groups:new':
+          new Group();
+          new GroupAvatar();
+          break;
         case 'groups:edit':
         case 'admin:groups:edit':
           new GroupAvatar();
@@ -243,20 +300,27 @@ const UserCallout = require('./user_callout');
         case 'projects:tree:show':
           shortcut_handler = new ShortcutsNavigation();
           new TreeView();
+          gl.TargetBranchDropDown.bootstrap();
           break;
         case 'projects:find_file:show':
           shortcut_handler = true;
           break;
+        case 'projects:blob:new':
+          gl.TargetBranchDropDown.bootstrap();
+          break;
+        case 'projects:blob:create':
+          gl.TargetBranchDropDown.bootstrap();
+          break;
         case 'projects:blob:show':
+          new BlobViewer();
+          gl.TargetBranchDropDown.bootstrap();
+          initBlob();
+          break;
+        case 'projects:blob:edit':
+          gl.TargetBranchDropDown.bootstrap();
+          break;
         case 'projects:blame:show':
-          new LineHighlighter();
-          shortcut_handler = new ShortcutsNavigation();
-          const fileBlobPermalinkUrlElement = document.querySelector('.js-data-file-blob-permalink-url');
-          const fileBlobPermalinkUrl = fileBlobPermalinkUrlElement && fileBlobPermalinkUrlElement.getAttribute('href');
-          new ShortcutsBlob({
-            skipResetBindings: true,
-            fileBlobPermalinkUrl,
-          });
+          initBlob();
           break;
         case 'groups:labels:new':
         case 'groups:labels:edit':
@@ -280,6 +344,9 @@ const UserCallout = require('./user_callout');
         case 'projects:artifacts:browse':
           new BuildArtifacts();
           break;
+        case 'projects:artifacts:file':
+          new BlobViewer();
+          break;
         case 'help:index':
           gl.VersionCheckImage.bindErrorEvent($('img.js-version-status-badge'));
           break;
@@ -287,8 +354,12 @@ const UserCallout = require('./user_callout');
           new Search();
           break;
         case 'projects:repository:show':
+          // Initialize Protected Branch Settings
           new gl.ProtectedBranchCreate();
           new gl.ProtectedBranchEditList();
+          // Initialize Protected Tag Settings
+          new ProtectedTagCreate();
+          new ProtectedTagEditList();
           break;
         case 'projects:ci_cd:show':
           new gl.ProjectVariables();
@@ -299,6 +370,10 @@ const UserCallout = require('./user_callout');
           break;
         case 'users:show':
           new UserCallout();
+          break;
+        case 'snippets:show':
+          new LineHighlighter();
+          new BlobViewer();
           break;
       }
       switch (path.first()) {
@@ -316,6 +391,9 @@ const UserCallout = require('./user_callout');
         case 'admin':
           new Admin();
           switch (path[1]) {
+            case 'cohorts':
+              new gl.UsagePing();
+              break;
             case 'groups':
               new UsersSelect();
               break;
@@ -335,8 +413,10 @@ const UserCallout = require('./user_callout');
           break;
         case 'dashboard':
         case 'root':
-          shortcut_handler = new ShortcutsDashboardNavigation();
           new UserCallout();
+          break;
+        case 'groups':
+          new GroupName();
           break;
         case 'profiles':
           new NotificationsForm();
@@ -345,6 +425,7 @@ const UserCallout = require('./user_callout');
         case 'projects':
           new Project();
           new ProjectAvatar();
+          new GroupName();
           switch (path[1]) {
             case 'compare':
               new CompareAutocomplete();
@@ -364,7 +445,7 @@ const UserCallout = require('./user_callout');
               break;
             case 'wikis':
               new gl.Wikis();
-              shortcut_handler = new ShortcutsNavigation();
+              shortcut_handler = new ShortcutsWiki();
               new ZenMode();
               new gl.GLForm($('.wiki-form'));
               break;
@@ -372,6 +453,8 @@ const UserCallout = require('./user_callout');
               shortcut_handler = new ShortcutsNavigation();
               if (path[2] === 'show') {
                 new ZenMode();
+                new LineHighlighter();
+                new BlobViewer();
               }
               break;
             case 'labels':

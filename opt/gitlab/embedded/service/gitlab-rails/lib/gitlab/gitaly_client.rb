@@ -4,28 +4,46 @@ module Gitlab
   module GitalyClient
     SERVER_VERSION_FILE = 'GITALY_SERVER_VERSION'.freeze
 
-    def self.gitaly_address
-      if Gitlab.config.gitaly.socket_path
-        "unix://#{Gitlab.config.gitaly.socket_path}"
+    MUTEX = Mutex.new
+    private_constant :MUTEX
+
+    def self.stub(name, storage)
+      MUTEX.synchronize do
+        @stubs ||= {}
+        @stubs[storage] ||= {}
+        @stubs[storage][name] ||= begin
+          klass = Gitaly.const_get(name.to_s.camelcase.to_sym).const_get(:Stub)
+          addr = address(storage)
+          addr = addr.sub(%r{^tcp://}, '') if URI(addr).scheme == 'tcp'
+          klass.new(addr, :this_channel_is_insecure)
+        end
       end
     end
 
-    def self.channel
-      return @channel if defined?(@channel)
+    def self.clear_stubs!
+      MUTEX.synchronize do
+        @stubs = nil
+      end
+    end
 
-      @channel =
-        if enabled?
-          # NOTE: Gitaly currently runs on a Unix socket, so permissions are
-          # handled using the file system and no additional authentication is
-          # required (therefore the :this_channel_is_insecure flag)
-          GRPC::Core::Channel.new(gitaly_address, {}, :this_channel_is_insecure)
-        else
-          nil
-        end
+    def self.address(storage)
+      params = Gitlab.config.repositories.storages[storage]
+      raise "storage not found: #{storage.inspect}" if params.nil?
+
+      address = params['gitaly_address']
+      unless address.present?
+        raise "storage #{storage.inspect} is missing a gitaly_address"
+      end
+
+      unless URI(address).scheme.in?(%w(tcp unix))
+        raise "Unsupported Gitaly address: #{address.inspect} does not use URL scheme 'tcp' or 'unix'"
+      end
+
+      address
     end
 
     def self.enabled?
-      gitaly_address.present?
+      Gitlab.config.gitaly.enabled
     end
 
     def self.feature_enabled?(feature)

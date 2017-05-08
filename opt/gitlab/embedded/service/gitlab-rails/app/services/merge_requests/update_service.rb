@@ -21,14 +21,17 @@ module MergeRequests
       update(merge_request)
     end
 
-    def handle_changes(merge_request, old_labels: [], old_mentioned_users: [])
+    def handle_changes(merge_request, options)
+      old_labels = options[:old_labels] || []
+      old_mentioned_users = options[:old_mentioned_users] || []
+
       if has_changes?(merge_request, old_labels: old_labels)
         todo_service.mark_pending_todos_as_done(merge_request, current_user)
       end
 
       if merge_request.previous_changes.include?('title') ||
           merge_request.previous_changes.include?('description')
-        todo_service.update_merge_request(merge_request, current_user)
+        todo_service.update_merge_request(merge_request, current_user, old_mentioned_users)
       end
 
       if merge_request.previous_changes.include?('target_branch')

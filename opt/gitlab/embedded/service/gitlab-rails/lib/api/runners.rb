@@ -86,7 +86,7 @@ module API
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
-    resource :projects do
+    resource :projects, requirements: { id: %r{[^/]+} } do
       before { authorize_admin_project }
 
       desc 'Get runners available for project' do
@@ -161,18 +161,18 @@ module API
       end
 
       def authenticate_show_runner!(runner)
-        return if runner.is_shared || current_user.is_admin?
+        return if runner.is_shared || current_user.admin?
         forbidden!("No access granted") unless user_can_access_runner?(runner)
       end
 
       def authenticate_update_runner!(runner)
-        return if current_user.is_admin?
+        return if current_user.admin?
         forbidden!("Runner is shared") if runner.is_shared?
         forbidden!("No access granted") unless user_can_access_runner?(runner)
       end
 
       def authenticate_delete_runner!(runner)
-        return if current_user.is_admin?
+        return if current_user.admin?
         forbidden!("Runner is shared") if runner.is_shared?
         forbidden!("Runner associated with more than one project") if runner.projects.count > 1
         forbidden!("No access granted") unless user_can_access_runner?(runner)
@@ -181,7 +181,7 @@ module API
       def authenticate_enable_runner!(runner)
         forbidden!("Runner is shared") if runner.is_shared?
         forbidden!("Runner is locked") if runner.locked?
-        return if current_user.is_admin?
+        return if current_user.admin?
         forbidden!("No access granted") unless user_can_access_runner?(runner)
       end
 

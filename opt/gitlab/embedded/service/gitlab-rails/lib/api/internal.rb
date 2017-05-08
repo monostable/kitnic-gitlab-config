@@ -11,13 +11,15 @@ module API
       # Params:
       #   key_id - ssh key id for Git over SSH
       #   user_id - user id for Git over HTTP
+      #   protocol - Git access protocol being used, e.g. HTTP or SSH
       #   project - project path with namespace
       #   action - git action (git-upload-pack or git-receive-pack)
-      #   ref - branch name
-      #   forced_push - forced_push
-      #   protocol - Git access protocol being used, e.g. HTTP or SSH
+      #   changes - changes as "oldrev newrev ref", see Gitlab::ChangesList
       post "/allowed" do
         status 200
+
+        # Stores some Git-specific env thread-safely
+        Gitlab::Git::Env.set(parse_env)
 
         actor =
           if params[:key_id]
@@ -30,22 +32,20 @@ module API
 
         actor.update_last_used_at if actor.is_a?(Key)
 
-        access =
-          if wiki?
-            Gitlab::GitAccessWiki.new(actor, project, protocol, authentication_abilities: ssh_authentication_abilities)
-          else
-            Gitlab::GitAccess.new(actor,
-                                  project,
-                                  protocol,
-                                  authentication_abilities: ssh_authentication_abilities,
-                                  env: parse_allowed_environment_variables)
-          end
-
-        access_status = access.check(params[:action], params[:changes])
+        access_checker = wiki? ? Gitlab::GitAccessWiki : Gitlab::GitAccess
+        access_status = access_checker
+          .new(actor, project, protocol, authentication_abilities: ssh_authentication_abilities)
+          .check(params[:action], params[:changes])
 
         response = { status: access_status.status, message: access_status.message }
 
         if access_status.status
+          log_user_activity(actor)
+
+          # Project id to pass between components that don't share/don't have
+          # access to the same filesystem mounts
+          response[:gl_repository] = Gitlab::GlRepository.gl_repository(project, wiki?)
+
           # Return the repository full path so that gitlab-shell has it when
           # handling ssh commands
           response[:repository_path] =
@@ -136,13 +136,15 @@ module API
       post "/notify_post_receive" do
         status 200
 
-        return unless Gitlab::GitalyClient.enabled?
-
-        begin
-          Gitlab::GitalyClient::Notifications.new.post_receive(params[:repo_path])
-        rescue GRPC::Unavailable => e
-          render_api_error(e, 500)
-        end
+        # TODO: Re-enable when Gitaly is processing the post-receive notification
+        # return unless Gitlab::GitalyClient.enabled?
+        #
+        # begin
+        #   repository = wiki? ? project.wiki.repository : project.repository
+        #   Gitlab::GitalyClient::Notifications.new(repository.raw_repository).post_receive
+        # rescue GRPC::Unavailable => e
+        #   render_api_error!(e, 500)
+        # end
       end
     end
   end

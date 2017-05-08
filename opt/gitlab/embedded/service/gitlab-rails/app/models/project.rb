@@ -53,6 +53,11 @@ class Project < ActiveRecord::Base
     update_column(:last_activity_at, self.created_at)
   end
 
+  after_create :set_last_repository_updated_at
+  def set_last_repository_updated_at
+    update_column(:last_repository_updated_at, self.created_at)
+  end
+
   after_destroy :remove_pages
 
   # update visibility_level of forks
@@ -74,6 +79,7 @@ class Project < ActiveRecord::Base
 
   attr_accessor :new_default_branch
   attr_accessor :old_path_with_namespace
+  attr_writer :pipeline_status
 
   alias_attribute :title, :name
 
@@ -114,6 +120,9 @@ class Project < ActiveRecord::Base
   has_one :kubernetes_service, dependent: :destroy, inverse_of: :project
   has_one :prometheus_service, dependent: :destroy, inverse_of: :project
   has_one :mock_ci_service, dependent: :destroy
+  has_one :mock_deployment_service, dependent: :destroy
+  has_one :mock_monitoring_service, dependent: :destroy
+  has_one :microsoft_teams_service, dependent: :destroy
 
   has_one  :forked_project_link,  dependent: :destroy, foreign_key: "forked_to_project_id"
   has_one  :forked_from_project,  through:   :forked_project_link
@@ -132,6 +141,7 @@ class Project < ActiveRecord::Base
   has_many :snippets,           dependent: :destroy, class_name: 'ProjectSnippet'
   has_many :hooks,              dependent: :destroy, class_name: 'ProjectHook'
   has_many :protected_branches, dependent: :destroy
+  has_many :protected_tags,     dependent: :destroy
 
   has_many :project_authorizations
   has_many :authorized_users, through: :project_authorizations, source: :user, class_name: 'User'
@@ -157,6 +167,7 @@ class Project < ActiveRecord::Base
   has_one :import_data, dependent: :destroy, class_name: "ProjectImportData"
   has_one :project_feature, dependent: :destroy
   has_one :statistics, class_name: 'ProjectStatistics', dependent: :delete
+  has_many :container_repositories, dependent: :destroy
 
   has_many :commit_statuses, dependent: :destroy
   has_many :pipelines, dependent: :destroy, class_name: 'Ci::Pipeline'
@@ -167,6 +178,9 @@ class Project < ActiveRecord::Base
   has_many :triggers, dependent: :destroy, class_name: 'Ci::Trigger'
   has_many :environments, dependent: :destroy
   has_many :deployments, dependent: :destroy
+  has_many :pipeline_schedules, dependent: :destroy, class_name: 'Ci::PipelineSchedule'
+
+  has_many :active_runners, -> { active }, through: :runner_projects, source: :runner, class_name: 'Ci::Runner'
 
   accepts_nested_attributes_for :variables, allow_destroy: true
   accepts_nested_attributes_for :project_feature
@@ -174,7 +188,7 @@ class Project < ActiveRecord::Base
   delegate :name, to: :owner, allow_nil: true, prefix: true
   delegate :count, to: :forks, prefix: true
   delegate :members, to: :team, prefix: true
-  delegate :add_user, to: :team
+  delegate :add_user, :add_users, to: :team
   delegate :add_guest, :add_reporter, :add_developer, :add_master, to: :team
   delegate :empty_repo?, to: :repository
 
@@ -188,13 +202,14 @@ class Project < ActiveRecord::Base
               message: Gitlab::Regex.project_name_regex_message }
   validates :path,
     presence: true,
-    project_path: true,
+    dynamic_path: true,
     length: { maximum: 255 },
-    format: { with: Gitlab::Regex.project_path_regex,
-              message: Gitlab::Regex.project_path_regex_message }
+    format: { with: Gitlab::Regex.project_path_format_regex,
+              message: Gitlab::Regex.project_path_regex_message },
+    uniqueness: { scope: :namespace_id }
+
   validates :namespace, presence: true
   validates :name, uniqueness: { scope: :namespace_id }
-  validates :path, uniqueness: { scope: :namespace_id }
   validates :import_url, addressable_url: true, if: :external_import?
   validates :import_url, importable_url: true, if: [:external_import?, :import_url_changed?]
   validates :star_count, numericality: { greater_than_or_equal_to: 0 }
@@ -255,6 +270,8 @@ class Project < ActiveRecord::Base
 
   scope :with_builds_enabled, -> { with_feature_enabled(:builds) }
   scope :with_issues_enabled, -> { with_feature_enabled(:issues) }
+
+  enum auto_cancel_pending_pipelines: { disabled: 0, enabled: 1 }
 
   # project features may be "disabled", "internal" or "enabled". If "internal",
   # they are only available to team members. This scope returns projects where
@@ -347,10 +364,15 @@ class Project < ActiveRecord::Base
     end
 
     def sort(method)
-      if method == 'storage_size_desc'
+      case method.to_s
+      when 'storage_size_desc'
         # storage_size is a joined column so we need to
         # pass a string to avoid AR adding the table name
         reorder('project_statistics.storage_size DESC, projects.id DESC')
+      when 'latest_activity_desc'
+        reorder(last_activity_at: :desc)
+      when 'latest_activity_asc'
+        reorder(last_activity_at: :asc)
       else
         order_by(method)
       end
@@ -399,32 +421,15 @@ class Project < ActiveRecord::Base
     @repository ||= Repository.new(path_with_namespace, self)
   end
 
-  def container_registry_path_with_namespace
-    path_with_namespace.downcase
-  end
-
-  def container_registry_repository
-    return unless Gitlab.config.registry.enabled
-
-    @container_registry_repository ||= begin
-      token = Auth::ContainerRegistryAuthenticationService.full_access_token(container_registry_path_with_namespace)
-      url = Gitlab.config.registry.api_url
-      host_port = Gitlab.config.registry.host_port
-      registry = ContainerRegistry::Registry.new(url, token: token, path: host_port)
-      registry.repository(container_registry_path_with_namespace)
-    end
-  end
-
-  def container_registry_repository_url
+  def container_registry_url
     if Gitlab.config.registry.enabled
-      "#{Gitlab.config.registry.host_port}/#{container_registry_path_with_namespace}"
+      "#{Gitlab.config.registry.host_port}/#{path_with_namespace.downcase}"
     end
   end
 
   def has_container_registry_tags?
-    return unless container_registry_repository
-
-    container_registry_repository.tags.any?
+    container_repositories.to_a.any?(&:has_tags?) ||
+      has_root_container_repository_tags?
   end
 
   def commit(ref = 'HEAD')
@@ -549,6 +554,10 @@ class Project < ActiveRecord::Base
 
   def gitea_import?
     import_type == 'gitea'
+  end
+
+  def github_import?
+    import_type == 'github'
   end
 
   def check_limit
@@ -859,14 +868,6 @@ class Project < ActiveRecord::Base
     @repo_exists = false
   end
 
-  # Branches that are not _exactly_ matched by a protected branch.
-  def open_branches
-    exact_protected_branch_names = protected_branches.reject(&:wildcard?).map(&:name)
-    branch_names = repository.branches.map(&:name)
-    non_open_branch_names = Set.new(exact_protected_branch_names).intersection(Set.new(branch_names))
-    repository.branches.reject { |branch| non_open_branch_names.include? branch.name }
-  end
-
   def root_ref?(branch)
     repository.root_ref == branch
   end
@@ -881,16 +882,8 @@ class Project < ActiveRecord::Base
     Gitlab::UrlSanitizer.new("#{web_url}.git", credentials: credentials).full_url
   end
 
-  # Check if current branch name is marked as protected in the system
-  def protected_branch?(branch_name)
-    return true if empty_repo? && default_branch_protected?
-
-    @protected_branches ||= self.protected_branches.to_a
-    ProtectedBranch.matching(branch_name, protected_branches: @protected_branches).present?
-  end
-
   def user_can_push_to_empty_repo?(user)
-    !default_branch_protected? || team.max_member_access(user.id) > Gitlab::Access::DEVELOPER
+    !ProtectedBranch.default_branch_protected? || team.max_member_access(user.id) > Gitlab::Access::DEVELOPER
   end
 
   def forked?
@@ -911,10 +904,10 @@ class Project < ActiveRecord::Base
     expire_caches_before_rename(old_path_with_namespace)
 
     if has_container_registry_tags?
-      Rails.logger.error "Project #{old_path_with_namespace} cannot be renamed because container registry tags are present"
+      Rails.logger.error "Project #{old_path_with_namespace} cannot be renamed because container registry tags are present!"
 
-      # we currently doesn't support renaming repository if it contains tags in container registry
-      raise StandardError.new('Project cannot be renamed, because tags are present in its container registry')
+      # we currently doesn't support renaming repository if it contains images in container registry
+      raise StandardError.new('Project cannot be renamed, because images are present in its container registry')
     end
 
     if gitlab_shell.mv_repository(repository_storage_path, old_path_with_namespace, new_path_with_namespace)
@@ -1089,23 +1082,19 @@ class Project < ActiveRecord::Base
   end
 
   def shared_runners
-    shared_runners_available? ? Ci::Runner.shared : Ci::Runner.none
+    @shared_runners ||= shared_runners_available? ? Ci::Runner.shared : Ci::Runner.none
+  end
+
+  def active_shared_runners
+    @active_shared_runners ||= shared_runners.active
   end
 
   def any_runners?(&block)
-    if runners.active.any?(&block)
-      return true
-    end
-
-    shared_runners.active.any?(&block)
+    active_runners.any?(&block) || active_shared_runners.any?(&block)
   end
 
   def valid_runners_token?(token)
     self.runners_token && ActiveSupport::SecurityUtils.variable_size_secure_compare(token, self.runners_token)
-  end
-
-  def build_coverage_enabled?
-    build_coverage_regex.present?
   end
 
   def build_timeout_in_minutes
@@ -1200,8 +1189,9 @@ class Project < ActiveRecord::Base
     end
   end
 
+  # Lazy loading of the `pipeline_status` attribute
   def pipeline_status
-    @pipeline_status ||= Ci::PipelineStatus.load_for_project(self)
+    @pipeline_status ||= Gitlab::Cache::Ci::ProjectPipelineStatus.load_for_project(self)
   end
 
   def mark_import_as_failed(error_message)
@@ -1261,7 +1251,7 @@ class Project < ActiveRecord::Base
     ]
 
     if container_registry_enabled?
-      variables << { key: 'CI_REGISTRY_IMAGE', value: container_registry_repository_url, public: true }
+      variables << { key: 'CI_REGISTRY_IMAGE', value: container_registry_url, public: true }
     end
 
     variables
@@ -1287,6 +1277,9 @@ class Project < ActiveRecord::Base
     else
       update_attribute(name, value)
     end
+
+  rescue ActiveRecord::RecordNotSaved => e
+    handle_update_attribute_error(e, value)
   end
 
   def pushes_since_gc
@@ -1331,6 +1324,14 @@ class Project < ActiveRecord::Base
     namespace_id_changed?
   end
 
+  def default_merge_request_target
+    if forked_from_project&.merge_requests_enabled?
+      forked_from_project
+    else
+      self
+    end
+  end
+
   alias_method :name_with_namespace, :full_name
   alias_method :human_name, :full_name
   alias_method :path_with_namespace, :full_path
@@ -1355,11 +1356,6 @@ class Project < ActiveRecord::Base
 
   def pushes_since_gc_redis_key
     "projects/#{id}/pushes_since_gc"
-  end
-
-  def default_branch_protected?
-    current_application_settings.default_branch_protection == Gitlab::Access::PROTECTION_FULL ||
-      current_application_settings.default_branch_protection == Gitlab::Access::PROTECTION_DEV_CAN_MERGE
   end
 
   # Similar to the normal callbacks that hook into the life cycle of an
@@ -1393,5 +1389,28 @@ class Project < ActiveRecord::Base
     return false unless path
 
     Project.unscoped.where(pending_delete: true).find_by_full_path(path_with_namespace)
+  end
+
+  ##
+  # This method is here because of support for legacy container repository
+  # which has exactly the same path like project does, but which might not be
+  # persisted in `container_repositories` table.
+  #
+  def has_root_container_repository_tags?
+    return false unless Gitlab.config.registry.enabled
+
+    ContainerRepository.build_root_repository(self).has_tags?
+  end
+
+  def handle_update_attribute_error(ex, value)
+    if ex.message.start_with?('Failed to replace')
+      if value.respond_to?(:each)
+        invalid = value.detect(&:invalid?)
+
+        raise ex, ([ex.message] + invalid.errors.full_messages).join(' ') if invalid
+      end
+    end
+
+    raise ex
   end
 end

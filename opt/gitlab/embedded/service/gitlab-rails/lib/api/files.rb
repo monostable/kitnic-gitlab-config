@@ -5,7 +5,7 @@ module API
         {
           file_path: attrs[:file_path],
           start_branch: attrs[:branch],
-          target_branch: attrs[:branch],
+          branch_name: attrs[:branch],
           commit_message: attrs[:commit_message],
           file_content: attrs[:content],
           file_content_encoding: attrs[:encoding],
@@ -52,7 +52,7 @@ module API
     params do
       requires :id, type: String, desc: 'The project ID'
     end
-    resource :projects do
+    resource :projects, requirements: { id: %r{[^/]+} } do
       desc 'Get raw file contents from the repository'
       params do
         requires :file_path, type: String, desc: 'The url encoded path to the file. Ex. lib%2Fclass%2Erb'
@@ -130,7 +130,7 @@ module API
         authorize! :push_code, user_project
 
         file_params = declared_params(include_missing: false)
-        result = ::Files::DestroyService.new(user_project, current_user, commit_params(file_params)).execute
+        result = ::Files::DeleteService.new(user_project, current_user, commit_params(file_params)).execute
 
         if result[:status] != :success
           render_api_error!(result[:message], 400)

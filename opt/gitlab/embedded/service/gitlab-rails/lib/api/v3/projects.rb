@@ -107,7 +107,7 @@ module API
         end
         get '/visible' do
           entity = current_user ? ::API::V3::Entities::ProjectWithAccess : ::API::Entities::BasicProjectDetails
-          present_projects ProjectsFinder.new.execute(current_user), with: entity
+          present_projects ProjectsFinder.new(current_user: current_user).execute, with: entity
         end
 
         desc 'Get a projects list for authenticated user' do
@@ -234,7 +234,7 @@ module API
       params do
         requires :id, type: String, desc: 'The ID of a project'
       end
-      resource :projects, requirements: { id: /[^\/]+/ } do
+      resource :projects, requirements: { id: %r{[^/]+} } do
         desc 'Get a single project' do
           success ::API::V3::Entities::ProjectWithAccess
         end
@@ -452,7 +452,7 @@ module API
           requires :file, type: File, desc: 'The file to be uploaded'
         end
         post ":id/uploads" do
-          ::Projects::UploadService.new(user_project, params[:file]).execute
+          UploadService.new(user_project, params[:file]).execute
         end
 
         desc 'Get the users list of a project' do

@@ -6,7 +6,12 @@
 }
 
 .limit-container-width {
-  .detail-page-header {
+  .detail-page-header,
+  .page-content-header,
+  .commit-box,
+  .info-well,
+  .commit-ci-menu,
+  .files-changed {
     @extend .fixed-width-container;
   }
 
@@ -17,16 +22,6 @@
     .merge-manually {
       @extend .fixed-width-container;
     }
-
-    .merge-request-tabs-holder {
-      &.affix {
-        border-bottom: 1px solid $border-color;
-
-        .nav-links {
-          border: 0;
-        }
-      }
-    }
   }
 
   .merge-request-details {
@@ -36,8 +31,7 @@
   }
 
   .diffs {
-    .mr-version-controls,
-    .files-changed {
+    .mr-version-controls {
       @extend .fixed-width-container;
     }
   }
@@ -52,7 +46,7 @@
 
   .title {
     padding: 0;
-    margin: 0;
+    margin-bottom: 16px;
     border-bottom: none;
   }
 
@@ -61,6 +55,10 @@
     border: 1px solid $white-normal;
     padding: 5px;
     max-height: calc(100vh - 100px);
+  }
+
+  .emoji-block {
+    padding: 10px 0 4px;
   }
 }
 
@@ -90,8 +88,13 @@
 }
 
 .right-sidebar {
-  a {
+  a,
+  .btn-link {
     color: inherit;
+  }
+
+  .btn-link {
+    outline: none;
   }
 
   .issuable-header-text {
@@ -196,6 +199,7 @@
   transition: width .3s;
   background: $gray-light;
   padding: 10px 20px;
+  z-index: 200;
 
   &.right-sidebar-expanded {
     width: $gutter_width;
@@ -209,8 +213,8 @@
       }
     }
 
-    .bold {
-      font-weight: 600;
+    .assign-yourself .btn-link {
+      padding-left: 0;
     }
 
     .light {
@@ -237,11 +241,19 @@
       margin-left: 0;
     }
 
+    .assignee .user-list .avatar {
+      margin: 0;
+    }
+
     .username {
       display: block;
       margin-top: 4px;
       font-size: 13px;
       font-weight: normal;
+    }
+
+    .hide-expanded {
+      display: none;
     }
   }
 
@@ -282,10 +294,11 @@
       display: block;
       width: 100%;
       text-align: center;
-      padding-bottom: 10px;
+      margin-bottom: 10px;
       color: $issuable-sidebar-color;
 
-      &:hover {
+      &:hover,
+      &:hover .todo-undone {
         color: $gl-text-color;
       }
 
@@ -294,12 +307,25 @@
         margin-top: 0;
       }
 
+      .sidebar-avatar-counter {
+        padding-top: 2px;
+      }
+
+      .todo-undone {
+        color: $gl-link-color;
+      }
+
       .author {
         display: none;
       }
 
-      .avatar:hover {
+      .avatar:hover,
+      .avatar-counter:hover {
         border-color: $issuable-sidebar-color;
+      }
+
+      .avatar-counter:hover {
+        color: $issuable-sidebar-color;
       }
 
       .btn-clipboard {
@@ -311,6 +337,17 @@
           color: $gl-text-color;
         }
       }
+
+      &.multiple-users {
+        display: flex;
+        justify-content: center;
+      }
+    }
+
+    .sidebar-avatar-counter {
+      width: 24px;
+      height: 24px;
+      border-radius: 12px;
     }
 
     .sidebar-collapsed-user {
@@ -320,6 +357,37 @@
 
     .issuable-header-btn {
       display: none;
+    }
+
+    .multiple-users {
+      height: 24px;
+      margin-bottom: 17px;
+      margin-top: 4px;
+      padding-bottom: 4px;
+
+      .btn-link {
+        padding: 0;
+        border: 0;
+
+        .avatar {
+          margin: 0;
+        }
+      }
+
+      .btn-link:first-child {
+        position: absolute;
+        left: 10px;
+        z-index: 1;
+      }
+
+      .btn-link:last-child {
+        position: absolute;
+        right: 10px;
+
+        &:hover {
+          text-decoration: none;
+        }
+      }
     }
   }
 
@@ -351,6 +419,8 @@
 }
 
 .detail-page-description {
+  padding: 16px 0 0;
+
   small {
     color: $gray-darkest;
   }
@@ -358,6 +428,8 @@
 
 .edited-text {
   color: $gray-darkest;
+  display: block;
+  margin: 0 0 16px;
 
   .author_link {
     color: $gray-darkest;
@@ -366,6 +438,12 @@
 
 .participants-list {
   margin: -5px;
+}
+
+
+.user-list {
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .participants-author {
@@ -385,12 +463,38 @@
   }
 }
 
-.participants-more {
+.user-item {
+  display: inline-block;
+  padding: 5px;
+  flex-basis: 20%;
+
+  .user-link {
+    display: inline-block;
+  }
+}
+
+.participants-more,
+.user-list-more {
   margin-top: 5px;
   margin-left: 5px;
 
-  a {
+  a,
+  .btn-link {
     color: $gl-text-color-secondary;
+  }
+
+  .btn-link {
+    outline: none;
+    padding: 0;
+  }
+
+  .btn-link:hover {
+    @extend a:hover;
+    text-decoration: none;
+  }
+
+  .btn-link:focus {
+    text-decoration: none;
   }
 }
 
@@ -484,6 +588,19 @@
   }
 }
 
+.issuable-list li,
+.issue-info-container .controls {
+  .avatar-counter {
+    display: inline-block;
+    vertical-align: middle;
+    min-width: 16px;
+    line-height: 14px;
+    height: 16px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+}
+
 .time_tracker {
   padding-bottom: 0;
   border-bottom: 0;
@@ -498,7 +615,7 @@
     svg {
       width: 16px;
       height: 16px;
-      fill: $sidebar-collapsed-icon-color;
+      fill: $issuable-sidebar-color;
     }
 
     &:hover svg {
@@ -520,12 +637,12 @@
 
     &.over_estimate {
       .meter-fill {
-        background: $red-light;
+        background: $red-500;
       }
 
       .time-remaining,
       .compare-value.spent {
-        color: $red-light;
+        color: $red-500;
       }
     }
   }
@@ -580,5 +697,23 @@
   .help-state-toggle-enter,
   .help-state-toggle-leave-active {
     opacity: 0;
+  }
+}
+
+.issuable-todo-btn {
+  .fa-spinner {
+    display: none;
+  }
+
+  &.is-loading {
+    .fa-spinner {
+      display: inline-block;
+    }
+
+    &.sidebar-collapsed-icon {
+      .issuable-todo-inner {
+        display: none;
+      }
+    }
   }
 }

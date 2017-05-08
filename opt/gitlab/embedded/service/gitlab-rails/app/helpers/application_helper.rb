@@ -180,52 +180,20 @@ module ApplicationHelper
     element
   end
 
-  def edited_time_ago_with_tooltip(object, placement: 'top', html_class: 'time_ago', include_author: false)
-    return if object.updated_at == object.created_at
+  def edited_time_ago_with_tooltip(object, placement: 'top', html_class: 'time_ago', exclude_author: false)
+    return unless object.is_edited?
 
-    content_tag :small, class: "edited-text" do
-      output = content_tag(:span, "Edited ")
-      output << time_ago_with_tooltip(object.updated_at, placement: placement, html_class: html_class)
+    content_tag :small, class: 'edited-text' do
+      output = content_tag(:span, 'Edited ')
+      output << time_ago_with_tooltip(object.last_edited_at, placement: placement, html_class: html_class)
 
-      if include_author && object.updated_by && object.updated_by != object.author
-        output << content_tag(:span, " by ")
-        output << link_to_member(object.project, object.updated_by, avatar: false, author_class: nil)
+      if !exclude_author && object.last_edited_by
+        output << content_tag(:span, ' by ')
+        output << link_to_member(object.project, object.last_edited_by, avatar: false, author_class: nil)
       end
 
       output
     end
-  end
-
-  def render_markup(file_name, file_content)
-    if gitlab_markdown?(file_name)
-      Hamlit::RailsHelpers.preserve(markdown(file_content))
-    elsif asciidoc?(file_name)
-      asciidoc(file_content)
-    elsif plain?(file_name)
-      content_tag :pre, class: 'plain-readme' do
-        file_content
-      end
-    else
-      other_markup(file_name, file_content)
-    end
-  rescue RuntimeError
-    simple_format(file_content)
-  end
-
-  def plain?(filename)
-    Gitlab::MarkupHelper.plain?(filename)
-  end
-
-  def markup?(filename)
-    Gitlab::MarkupHelper.markup?(filename)
-  end
-
-  def gitlab_markdown?(filename)
-    Gitlab::MarkupHelper.gitlab_markdown?(filename)
-  end
-
-  def asciidoc?(filename)
-    Gitlab::MarkupHelper.asciidoc?(filename)
   end
 
   def promo_host
@@ -305,5 +273,9 @@ module ApplicationHelper
   #   %li{ class: active_when(params[:filter] == '1') }
   def active_when(condition)
     'active' if condition
+  end
+
+  def show_user_callout?
+    cookies[:user_callout_dismissed] == 'true'
   end
 end

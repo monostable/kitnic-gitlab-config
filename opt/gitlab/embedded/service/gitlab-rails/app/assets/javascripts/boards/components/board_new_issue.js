@@ -1,4 +1,6 @@
 /* global ListIssue */
+import eventHub from '../eventhub';
+
 const Store = gl.issueBoards.BoardsStore;
 
 export default {
@@ -24,6 +26,7 @@ export default {
         title: this.title,
         labels,
         subscribed: true,
+        assignees: [],
       });
 
       this.list.newIssue(issue)
@@ -49,7 +52,7 @@ export default {
     },
     cancel() {
       this.title = '';
-      gl.IssueBoardsApp.$emit(`hide-issue-form-${this.list.id}`);
+      eventHub.$emit(`hide-issue-form-${this.list.id}`);
     },
   },
   mounted() {

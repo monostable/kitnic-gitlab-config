@@ -1,9 +1,10 @@
-/* global Vue */
-/* global Cookies */
 /* global Flash */
 
-window.Vue = require('vue');
-window.Cookies = require('js-cookie');
+import Vue from 'vue';
+import Cookies from 'js-cookie';
+import Translate from '../vue_shared/translate';
+import LimitWarningComponent from './components/limit_warning_component';
+
 require('./components/stage_code_component');
 require('./components/stage_issue_component');
 require('./components/stage_plan_component');
@@ -15,6 +16,8 @@ require('./components/total_time_component');
 require('./cycle_analytics_service');
 require('./cycle_analytics_store');
 require('./default_event_objects');
+
+Vue.use(Translate);
 
 $(() => {
   const OVERVIEW_DIALOG_COOKIE = 'cycle_analytics_help_dismissed';
@@ -125,11 +128,12 @@ $(() => {
       },
       dismissOverviewDialog() {
         this.isOverviewDialogDismissed = true;
-        Cookies.set(OVERVIEW_DIALOG_COOKIE, '1');
+        Cookies.set(OVERVIEW_DIALOG_COOKIE, '1', { expires: 365 });
       },
     },
   });
 
   // Register global components
+  Vue.component('limit-warning', LimitWarningComponent);
   Vue.component('total-time', gl.cycleAnalytics.TotalTimeComponent);
 });

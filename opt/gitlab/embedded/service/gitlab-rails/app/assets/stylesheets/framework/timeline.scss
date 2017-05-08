@@ -1,28 +1,7 @@
 .timeline {
   @include basic-list;
-
   margin: 0;
   padding: 0;
-
-  .timeline-entry {
-    padding: $gl-padding $gl-btn-padding 11px;
-    border-color: $white-normal;
-    color: $gl-text-color;
-    border-bottom: 1px solid $border-white-light;
-
-    &:target {
-      background: $line-target-blue;
-    }
-
-    .avatar {
-      margin-right: 15px;
-    }
-
-    .controls {
-      padding-top: 10px;
-      float: right;
-    }
-  }
 
   .note-text {
     p:last-child {
@@ -43,20 +22,44 @@
   }
 }
 
+.timeline-entry {
+  border-color: $white-normal;
+  color: $gl-text-color;
+  border-bottom: 1px solid $border-white-light;
+
+  .timeline-entry-inner {
+    position: relative;
+  }
+
+  &:target,
+  &.target {
+    background: $line-target-blue;
+  }
+
+  .avatar {
+    margin-right: 15px;
+  }
+
+  .controls {
+    padding-top: 10px;
+    float: right;
+  }
+}
+
 @media (max-width: $screen-xs-max) {
   .timeline {
     &::before {
       background: none;
     }
+  }
 
-    .timeline-entry .timeline-entry-inner {
-      .timeline-icon {
-        display: none;
-      }
+  .timeline-entry .timeline-entry-inner {
+    .timeline-icon {
+      display: none;
+    }
 
-      .timeline-content {
-        margin-left: 0;
-      }
+    .timeline-content {
+      margin-left: 0;
     }
   }
 }

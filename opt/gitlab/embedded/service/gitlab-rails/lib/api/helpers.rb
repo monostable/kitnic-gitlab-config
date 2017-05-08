@@ -91,8 +91,8 @@ module API
     end
 
     def find_project_snippet(id)
-      finder_params = { filter: :by_project, project: user_project }
-      SnippetsFinder.new.execute(current_user, finder_params).find(id)
+      finder_params = { project: user_project }
+      SnippetsFinder.new(current_user, finder_params).execute.find(id)
     end
 
     def find_merge_request_with_access(iid, access_level = :read_merge_request)
@@ -102,7 +102,7 @@ module API
     end
 
     def authenticate!
-      unauthorized! unless current_user
+      unauthorized! unless current_user && can?(initial_current_user, :access_api)
     end
 
     def authenticate_non_get!
@@ -118,10 +118,10 @@ module API
 
     def authenticated_as_admin!
       authenticate!
-      forbidden! unless current_user.is_admin?
+      forbidden! unless current_user.admin?
     end
 
-    def authorize!(action, subject = nil)
+    def authorize!(action, subject = :global)
       forbidden! unless can?(current_user, action, subject)
     end
 
@@ -139,7 +139,7 @@ module API
       end
     end
 
-    def can?(object, action, subject)
+    def can?(object, action, subject = :global)
       Ability.allowed?(object, action, subject)
     end
 
@@ -358,7 +358,7 @@ module API
       return unless sudo_identifier
       return unless initial_current_user
 
-      unless initial_current_user.is_admin?
+      unless initial_current_user.admin?
         forbidden!('Must be admin to use sudo')
       end
 

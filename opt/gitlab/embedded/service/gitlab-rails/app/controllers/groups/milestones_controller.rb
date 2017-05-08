@@ -1,11 +1,14 @@
 class Groups::MilestonesController < Groups::ApplicationController
+  include MilestoneActions
+
   before_action :group_projects
-  before_action :milestone, only: [:show, :update]
+  before_action :milestone, only: [:show, :update, :merge_requests, :participants, :labels]
   before_action :authorize_admin_milestones!, only: [:new, :create, :update]
 
   def index
     respond_to do |format|
       format.html do
+        @milestone_states = GlobalMilestone.states_count(@projects)
         @milestones = Kaminari.paginate_array(milestones).page(params[:page])
       end
     end

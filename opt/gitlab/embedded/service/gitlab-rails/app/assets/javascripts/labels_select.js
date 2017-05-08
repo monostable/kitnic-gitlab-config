@@ -330,8 +330,14 @@
           },
           multiSelect: $dropdown.hasClass('js-multiselect'),
           vue: $dropdown.hasClass('js-issue-board-sidebar'),
-          clicked: function(label, $el, e, isMarking) {
+          clicked: function(options) {
+            const { $el, e, isMarking } = options;
+            const label = options.selectedObj;
+
             var isIssueIndex, isMRIndex, page, boardsModel;
+            var fadeOutLoader = () => {
+              $loading.fadeOut();
+            };
 
             page = $('body').data('page');
             isIssueIndex = page === 'projects:issues:index';
@@ -349,35 +355,21 @@
 
             if ($dropdown.hasClass('js-filter-bulk-update')) {
               _this.enableBulkLabelDropdown();
-              _this.setDropdownData($dropdown, isMarking, this.id(label));
+              _this.setDropdownData($dropdown, isMarking, label.id);
               return;
             }
 
-            if ($('html').hasClass('issue-boards-page') && !$dropdown.hasClass('js-issue-board-sidebar') &&
-              !$dropdown.closest('.add-issues-modal').length) {
-              boardsModel = gl.issueBoards.BoardsStore.state.filters;
-            } else if ($dropdown.closest('.add-issues-modal').length) {
+            if ($dropdown.closest('.add-issues-modal').length) {
               boardsModel = gl.issueBoards.ModalStore.store.filter;
             }
 
             if (boardsModel) {
               if (label.isAny) {
                 boardsModel['label_name'] = [];
-              }
-              else if ($el.hasClass('is-active')) {
+              } else if ($el.hasClass('is-active')) {
                 boardsModel['label_name'].push(label.title);
               }
-              else {
-                var filters = boardsModel['label_name'];
-                filters = filters.filter(function (filteredLabel) {
-                  return filteredLabel !== label.title;
-                });
-                boardsModel['label_name'] = filters;
-              }
 
-              if (!$dropdown.closest('.add-issues-modal').length) {
-                gl.issueBoards.BoardsStore.updateFiltersUrl();
-              }
               e.preventDefault();
               return;
             }
@@ -410,9 +402,8 @@
               $loading.fadeIn();
 
               gl.issueBoards.BoardsStore.detail.issue.update($dropdown.attr('data-issue-update'))
-                .then(function () {
-                  $loading.fadeOut();
-                });
+                .then(fadeOutLoader)
+                .catch(fadeOutLoader);
             }
             else {
               if ($dropdown.hasClass('js-multiselect')) {

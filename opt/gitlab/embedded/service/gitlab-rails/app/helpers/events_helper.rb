@@ -1,9 +1,21 @@
 module EventsHelper
-  def link_to_author(event)
+  ICON_NAMES_BY_EVENT_TYPE = {
+    'pushed to' => 'icon_commit',
+    'pushed new' => 'icon_commit',
+    'created' => 'icon_status_open',
+    'opened' => 'icon_status_open',
+    'closed' => 'icon_status_closed',
+    'accepted' => 'icon_code_fork',
+    'commented on' => 'icon_comment_o',
+    'deleted' => 'icon_trash_o'
+  }.freeze
+
+  def link_to_author(event, self_added: false)
     author = event.author
 
     if author
-      link_to author.name, user_path(author.username), title: author.name
+      name = self_added ? 'You' : author.name
+      link_to name, user_path(author.username), title: name
     else
       event.author_name
     end
@@ -181,6 +193,23 @@ module EventsHelper
       "event-block"
     else
       "event-inline"
+    end
+  end
+
+  def icon_for_event(note)
+    icon_name = ICON_NAMES_BY_EVENT_TYPE[note]
+    custom_icon(icon_name) if icon_name
+  end
+
+  def icon_for_profile_event(event)
+    if current_path?('users#show')
+      content_tag :div, class: "system-note-image #{event.action_name.parameterize}-icon" do
+        icon_for_event(event.action_name)
+      end
+    else
+      content_tag :div, class: 'system-note-image user-avatar' do
+        author_avatar(event, size: 32)
+      end
     end
   end
 end

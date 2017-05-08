@@ -3,7 +3,8 @@
 /* global notifyPermissions */
 /* global merge_request_widget */
 
-require('./smart_interval');
+import './smart_interval';
+import MiniPipelineGraph from './mini_pipeline_graph_dropdown';
 
 ((global) => {
   var indexOf = [].indexOf || function(item) { for (var i = 0, l = this.length; i < l; i += 1) { if (i in this && this[i] === item) return i; } return -1; };
@@ -37,11 +38,13 @@ require('./smart_interval');
     function MergeRequestWidget(opts) {
       // Initialize MergeRequestWidget behavior
       //
-      //   check_enable           - Boolean, whether to check automerge status
-      //   merge_check_url - String, URL to use to check automerge status
+      //   check_enable         - Boolean, whether to check automerge status
+      //   merge_check_url      - String, URL to use to check automerge status
       //   ci_status_url        - String, URL to use to check CI status
+      //   pipeline_status_url  - String, URL to use to get CI status for Favicon
       //
       this.opts = opts;
+      this.opts.pipeline_status_url = `${this.opts.pipeline_status_url}.json`;
       this.$widgetBody = $('.mr-widget-body');
       $('#modal_merge_info').modal({
         show: false
@@ -158,6 +161,7 @@ require('./smart_interval');
           _this.status = data.status;
           _this.hasCi = data.has_ci;
           _this.updateMergeButton(_this.status, _this.hasCi);
+          gl.utils.setCiStatusFavicon(_this.opts.pipeline_status_url);
           if (data.environments && data.environments.length) _this.renderEnvironments(data.environments);
           if (data.status !== _this.opts.ci_status ||
               data.sha !== _this.opts.ci_sha ||
@@ -287,11 +291,11 @@ require('./smart_interval');
 
     MergeRequestWidget.prototype.updateCommitUrls = function(id) {
       const commitsUrl = this.opts.commits_path;
-      $('.js-commit-link').text(`#${id}`).attr('href', [commitsUrl, id].join('/'));
+      $('.js-commit-link').text(id).attr('href', [commitsUrl, id].join('/'));
     };
 
     MergeRequestWidget.prototype.initMiniPipelineGraph = function() {
-      new gl.MiniPipelineGraph({
+      new MiniPipelineGraph({
         container: '.js-pipeline-inline-mr-widget-graph:visible',
       }).bindEvents();
     };

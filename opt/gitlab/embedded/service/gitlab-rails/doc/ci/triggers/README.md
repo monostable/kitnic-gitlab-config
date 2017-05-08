@@ -1,6 +1,6 @@
-# Triggering jobs through the API
+# Triggering pipelines through the API
 
-> **Note**:
+> **Notes**:
 - [Introduced][ci-229] in GitLab CE 7.14.
 - GitLab 8.12 has a completely redesigned job permissions system. Read all
   about the [new model and its implications](../../user/project/new_ci_build_permissions_model.md#job-triggers).
@@ -208,7 +208,7 @@ curl --request POST \
   https://gitlab.example.com/api/v4/projects/9/trigger/pipeline
 ```
 
-### Using webhook to trigger job
+### Using a webhook to trigger a pipeline
 
 You can add the following webhook to another project in order to trigger a job:
 
@@ -216,7 +216,11 @@ You can add the following webhook to another project in order to trigger a job:
 https://gitlab.example.com/api/v4/projects/9/ref/master/trigger/pipeline?token=TOKEN&variables[UPLOAD_TO_S3]=true
 ```
 
-### Using cron to trigger nightly jobs
+### Using cron to trigger nightly pipelines
+
+>**Note:**
+The following behavior can also be achieved through GitLab's UI with
+[pipeline schedules](../../user/project/pipelines/schedules.md).
 
 Whether you craft a script or just run cURL directly, you can trigger jobs
 in conjunction with cron. The example below triggers a job on the `master`

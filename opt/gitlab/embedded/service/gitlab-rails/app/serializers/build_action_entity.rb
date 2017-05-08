@@ -11,4 +11,14 @@ class BuildActionEntity < Grape::Entity
       build.project,
       build)
   end
+
+  expose :playable?, as: :playable
+
+  private
+
+  alias_method :build, :object
+
+  def playable?
+    build.playable? && can?(request.current_user, :update_build, build)
+  end
 end

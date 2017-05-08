@@ -1,28 +1,33 @@
 /* eslint-disable space-before-function-paren, no-underscore-dangle, class-methods-use-this, consistent-return, no-shadow, no-param-reassign, max-len, no-unused-vars */
 /* global ListIssue */
 /* global ListLabel */
+import queryData from '../utils/query_data';
+
+const PER_PAGE = 20;
 
 class List {
-  constructor (obj) {
+  constructor (obj, defaultAvatar) {
     this.id = obj.id;
     this._uid = this.guid();
     this.position = obj.position;
     this.title = obj.title;
     this.type = obj.list_type;
-    this.preset = ['done', 'blank'].indexOf(this.type) > -1;
-    this.filters = gl.issueBoards.BoardsStore.state.filters;
+    this.preset = ['closed', 'blank'].indexOf(this.type) > -1;
     this.page = 1;
     this.loading = true;
     this.loadingMore = false;
     this.issues = [];
     this.issuesSize = 0;
+    this.defaultAvatar = defaultAvatar;
 
     if (obj.label) {
       this.label = new ListLabel(obj.label);
     }
 
     if (this.type !== 'blank' && this.id) {
-      this.getIssues();
+      this.getIssues().catch(() => {
+        // TODO: handle request error
+      });
     }
   }
 
@@ -49,28 +54,33 @@ class List {
     gl.issueBoards.BoardsStore.state.lists.splice(index, 1);
     gl.issueBoards.BoardsStore.updateNewListDropdown(this.id);
 
-    gl.boardService.destroyList(this.id);
+    gl.boardService.destroyList(this.id)
+      .catch(() => {
+        // TODO: handle request error
+      });
   }
 
   update () {
-    gl.boardService.updateList(this.id, this.position);
+    gl.boardService.updateList(this.id, this.position)
+      .catch(() => {
+        // TODO: handle request error
+      });
   }
 
   nextPage () {
     if (this.issuesSize > this.issues.length) {
-      this.page += 1;
+      if (this.issues.length / PER_PAGE >= 1) {
+        this.page += 1;
+      }
 
       return this.getIssues(false);
     }
   }
 
   getIssues (emptyIssues = true) {
-    const filters = this.filters;
-    const data = { page: this.page };
+    const data = queryData(gl.issueBoards.BoardsStore.filter.path, { page: this.page });
 
-    Object.keys(filters).forEach((key) => { data[key] = filters[key]; });
-
-    if (this.label) {
+    if (this.label && data.label_name) {
       data.label_name = data.label_name.filter(label => label !== this.label.title);
     }
 
@@ -105,7 +115,7 @@ class List {
 
   createIssues (data) {
     data.forEach((issueObj) => {
-      this.addIssue(new ListIssue(issueObj));
+      this.addIssue(new ListIssue(issueObj, this.defaultAvatar));
     });
   }
 
@@ -144,13 +154,16 @@ class List {
     this.issues.splice(oldIndex, 1);
     this.issues.splice(newIndex, 0, issue);
 
-    gl.boardService.moveIssue(issue.id, null, null, moveBeforeIid, moveAfterIid);
+    gl.boardService.moveIssue(issue.id, null, null, moveBeforeIid, moveAfterIid)
+      .catch(() => {
+        // TODO: handle request error
+      });
   }
 
   updateIssueLabel(issue, listFrom, moveBeforeIid, moveAfterIid) {
     gl.boardService.moveIssue(issue.id, listFrom.id, this.id, moveBeforeIid, moveAfterIid)
-      .then(() => {
-        listFrom.getIssues(false);
+      .catch(() => {
+        // TODO: handle request error
       });
   }
 

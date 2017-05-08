@@ -117,7 +117,7 @@ class ProjectsController < Projects::ApplicationController
     return access_denied! unless can?(current_user, :remove_project, @project)
 
     ::Projects::DestroyService.new(@project, current_user, {}).async_execute
-    flash[:alert] = "Project '#{@project.name}' will be deleted."
+    flash[:alert] = "Project '#{@project.name_with_namespace}' will be deleted."
 
     redirect_to dashboard_projects_path
   rescue Projects::DestroyService::DestroyError => ex
@@ -216,20 +216,6 @@ class ProjectsController < Projects::ApplicationController
     }
   end
 
-  def preview_markdown
-    text = params[:text]
-
-    ext = Gitlab::ReferenceExtractor.new(@project, current_user)
-    ext.analyze(text, author: current_user)
-
-    render json: {
-      body:       view_context.markdown(text),
-      references: {
-        users: ext.users.map(&:username)
-      }
-    }
-  end
-
   def refs
     branches = BranchesFinder.new(@repository, params).execute.map(&:name)
 
@@ -250,6 +236,18 @@ class ProjectsController < Projects::ApplicationController
     end
 
     render json: options.to_json
+  end
+
+  def preview_markdown
+    result = PreviewMarkdownService.new(@project, current_user, params).execute
+
+    render json: {
+      body: view_context.markdown(result[:text]),
+      references: {
+        users: result[:users],
+        commands: view_context.markdown(result[:commands])
+      }
+    }
   end
 
   private
@@ -316,6 +314,7 @@ class ProjectsController < Projects::ApplicationController
       :namespace_id,
       :only_allow_merge_if_all_discussions_are_resolved,
       :only_allow_merge_if_pipeline_succeeds,
+      :printing_merge_request_link_enabled,
       :path,
       :public_builds,
       :request_access_enabled,
@@ -344,7 +343,11 @@ class ProjectsController < Projects::ApplicationController
   end
 
   def project_view_files?
-    current_user && current_user.project_view == 'files'
+    if current_user
+      current_user.project_view == 'files'
+    else
+      project_view_files_allowed?
+    end
   end
 
   # Override extract_ref from ExtractsPath, which returns the branch and file path
@@ -357,5 +360,16 @@ class ProjectsController < Projects::ApplicationController
   # Override get_id from ExtractsPath in this case is just the root of the default branch.
   def get_id
     project.repository.root_ref
+  end
+
+  def project_view_files_allowed?
+    !project.empty_repo? && can?(current_user, :download_code, project)
+  end
+
+  def build_canonical_path(project)
+    params[:namespace_id] = project.namespace.to_param
+    params[:id] = project.to_param
+
+    url_for(params)
   end
 end

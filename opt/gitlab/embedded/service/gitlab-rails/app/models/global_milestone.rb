@@ -28,6 +28,28 @@ class GlobalMilestone
     new(title, child_milestones)
   end
 
+  def self.states_count(projects)
+    relation = MilestonesFinder.new.execute(projects, state: 'all')
+    milestones_by_state_and_title = relation.reorder(nil).group(:state, :title).count
+
+    opened = count_by_state(milestones_by_state_and_title, 'active')
+    closed = count_by_state(milestones_by_state_and_title, 'closed')
+    all = milestones_by_state_and_title.map { |(_, title), _| title }.uniq.count
+
+    {
+      opened: opened,
+      closed: closed,
+      all: all
+    }
+  end
+
+  def self.count_by_state(milestones_by_state_and_title, state)
+    milestones_by_state_and_title.count do |(milestone_state, _), _|
+      milestone_state == state
+    end
+  end
+  private_class_method :count_by_state
+
   def initialize(title, milestones)
     @title = title
     @name = title
@@ -64,7 +86,7 @@ class GlobalMilestone
   end
 
   def issues
-    @issues ||= Issue.of_milestones(milestoneish_ids).includes(:project, :assignee, :labels)
+    @issues ||= Issue.of_milestones(milestoneish_ids).includes(:project, :assignees, :labels)
   end
 
   def merge_requests
@@ -72,7 +94,7 @@ class GlobalMilestone
   end
 
   def participants
-    @participants ||= milestones.includes(:participants).map(&:participants).flatten.compact.uniq
+    @participants ||= milestones.map(&:participants).flatten.uniq
   end
 
   def labels

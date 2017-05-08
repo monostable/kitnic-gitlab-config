@@ -28,6 +28,8 @@ class ApplicationSetting < ActiveRecord::Base
 
   attr_accessor :domain_whitelist_raw, :domain_blacklist_raw
 
+  validates :uuid, presence: true
+
   validates :session_expire_delay,
             presence: true,
             numericality: { only_integer: true, greater_than_or_equal_to: 0 }
@@ -59,6 +61,10 @@ class ApplicationSetting < ActiveRecord::Base
   validates :sentry_dsn,
             presence: true,
             if: :sentry_enabled
+
+  validates :clientside_sentry_dsn,
+            presence: true,
+            if: :clientside_sentry_enabled
 
   validates :akismet_api_key,
             presence: true,
@@ -131,6 +137,10 @@ class ApplicationSetting < ActiveRecord::Base
             presence: true,
             numericality: { only_integer: true, greater_than_or_equal_to: 0 }
 
+  validates :polling_interval_multiplier,
+            presence: true,
+            numericality: { greater_than_or_equal_to: 0 }
+
   validates_each :restricted_visibility_levels do |record, attr, value|
     value&.each do |level|
       unless Gitlab::VisibilityLevel.options.has_value?(level)
@@ -155,6 +165,7 @@ class ApplicationSetting < ActiveRecord::Base
     end
   end
 
+  before_validation :ensure_uuid!
   before_save :ensure_runners_registration_token
   before_save :ensure_health_check_access_token
 
@@ -233,7 +244,9 @@ class ApplicationSetting < ActiveRecord::Base
       signup_enabled: Settings.gitlab['signup_enabled'],
       terminal_max_session_time: 0,
       two_factor_grace_period: 48,
-      user_default_external: false
+      user_default_external: false,
+      polling_interval_multiplier: 1,
+      usage_ping_enabled: Settings.gitlab['usage_ping_enabled']
     }
   end
 
@@ -336,7 +349,21 @@ class ApplicationSetting < ActiveRecord::Base
     sidekiq_throttling_enabled
   end
 
+  def usage_ping_can_be_configured?
+    Settings.gitlab.usage_ping_enabled
+  end
+
+  def usage_ping_enabled
+    usage_ping_can_be_configured? && super
+  end
+
   private
+
+  def ensure_uuid!
+    return if uuid?
+
+    self.uuid = SecureRandom.uuid
+  end
 
   def check_repository_storages
     invalid = repository_storages - Gitlab.config.repositories.storages.keys

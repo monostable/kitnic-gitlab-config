@@ -33,7 +33,7 @@ class Namespace < ActiveRecord::Base
   validates :path,
     presence: true,
     length: { maximum: 255 },
-    namespace: true
+    dynamic_path: true
 
   validate :nesting_level_allowed
 
@@ -46,7 +46,7 @@ class Namespace < ActiveRecord::Base
   before_destroy(prepend: true) { prepare_for_destroy }
   after_destroy :rm_dir
 
-  scope :root, -> { where('type IS NULL') }
+  scope :for_user, -> { where('type IS NULL') }
 
   scope :with_statistics, -> do
     joins('LEFT JOIN project_statistics ps ON ps.namespace_id = namespaces.id')
@@ -150,7 +150,7 @@ class Namespace < ActiveRecord::Base
   end
 
   def any_project_has_container_registry_tags?
-    projects.any?(&:has_container_registry_tags?)
+    all_projects.any?(&:has_container_registry_tags?)
   end
 
   def send_update_instructions
@@ -214,6 +214,16 @@ class Namespace < ActiveRecord::Base
     @old_repository_storage_paths ||= repository_storage_paths
   end
 
+  # Includes projects from this namespace and projects from all subgroups
+  # that belongs to this namespace
+  def all_projects
+    Project.inside_path(full_path)
+  end
+
+  def has_parent?
+    parent.present?
+  end
+
   private
 
   def repository_storage_paths
@@ -221,7 +231,7 @@ class Namespace < ActiveRecord::Base
     # pending delete. Unscoping also get rids of the default order, which causes
     # problems with SELECT DISTINCT.
     Project.unscoped do
-      projects.select('distinct(repository_storage)').to_a.map(&:repository_storage_path)
+      all_projects.select('distinct(repository_storage)').to_a.map(&:repository_storage_path)
     end
   end
 

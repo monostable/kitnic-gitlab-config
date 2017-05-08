@@ -36,6 +36,7 @@ You can see GitLab's keyboard shortcuts by using 'shift + ?'
 | <kbd>g</kbd> + <kbd>p</kbd> | Go to projects |
 | <kbd>g</kbd> + <kbd>i</kbd> | Go to issues |
 | <kbd>g</kbd> + <kbd>m</kbd> | Go to merge requests |
+| <kbd>g</kbd> + <kbd>t</kbd> | Go to todos |
 
 ## Project
 
@@ -74,3 +75,9 @@ You can see GitLab's keyboard shortcuts by using 'shift + ?'
 | <kbd>r</kbd> | Reply (quoting selected text) |
 | <kbd>e</kbd> | Edit issue/merge request |
 | <kbd>l</kbd> | Change label |
+
+## Wiki pages
+
+| Keyboard Shortcut | Description |
+| ----------------- | ----------- |
+| <kbd>e</kbd> | Edit wiki page|

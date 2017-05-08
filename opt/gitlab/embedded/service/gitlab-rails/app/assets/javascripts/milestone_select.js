@@ -1,5 +1,4 @@
 /* eslint-disable func-names, space-before-function-paren, wrap-iife, no-var, no-underscore-dangle, prefer-arrow-callback, max-len, one-var, one-var-declaration-per-line, no-unused-vars, object-shorthand, comma-dangle, no-else-return, no-self-compare, consistent-return, no-param-reassign, no-shadow */
-/* global Vue */
 /* global Issuable */
 /* global ListMilestone */
 
@@ -122,7 +121,10 @@
             return $value.css('display', '');
           },
           vue: $dropdown.hasClass('js-issue-board-sidebar'),
-          clicked: function(selected, $el, e) {
+          clicked: function(options) {
+            const { $el, e } = options;
+            let selected = options.selectedObj;
+
             var data, isIssueIndex, isMRIndex, page, boardsStore;
             page = $('body').data('page');
             isIssueIndex = page === 'projects:issues:index';
@@ -132,18 +134,12 @@
               return;
             }
 
-            if ($('html').hasClass('issue-boards-page') && !$dropdown.hasClass('js-issue-board-sidebar') &&
-              !$dropdown.closest('.add-issues-modal').length) {
-              boardsStore = gl.issueBoards.BoardsStore.state.filters;
-            } else if ($dropdown.closest('.add-issues-modal').length) {
+            if ($dropdown.closest('.add-issues-modal').length) {
               boardsStore = gl.issueBoards.ModalStore.store.filter;
             }
 
             if (boardsStore) {
               boardsStore[$dropdown.data('field-name')] = selected.name;
-              if (!$dropdown.closest('.add-issues-modal').length) {
-                gl.issueBoards.BoardsStore.updateFiltersUrl();
-              }
               e.preventDefault();
             } else if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
               if (selected.name != null) {
@@ -156,12 +152,12 @@
               return $dropdown.closest('form').submit();
             } else if ($dropdown.hasClass('js-issue-board-sidebar')) {
               if (selected.id !== -1) {
-                Vue.set(gl.issueBoards.BoardsStore.detail.issue, 'milestone', new ListMilestone({
+                gl.issueBoards.boardStoreIssueSet('milestone', new ListMilestone({
                   id: selected.id,
                   title: selected.name
                 }));
               } else {
-                Vue.delete(gl.issueBoards.BoardsStore.detail.issue, 'milestone');
+                gl.issueBoards.boardStoreIssueDelete('milestone');
               }
 
               $dropdown.trigger('loading.gl.dropdown');
@@ -170,6 +166,9 @@
               gl.issueBoards.BoardsStore.detail.issue.update($dropdown.attr('data-issue-update'))
                 .then(function () {
                   $dropdown.trigger('loaded.gl.dropdown');
+                  $loading.fadeOut();
+                })
+                .catch(() => {
                   $loading.fadeOut();
                 });
             } else {

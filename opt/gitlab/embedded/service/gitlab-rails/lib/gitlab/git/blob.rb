@@ -8,7 +8,7 @@ module Gitlab
       # the user. We load as much as we can for encoding detection
       # (Linguist) and LFS pointer parsing. All other cases where we need full
       # blob data should use load_all_data!.
-      MAX_DATA_DISPLAY_SIZE = 10485760
+      MAX_DATA_DISPLAY_SIZE = 10.megabytes
 
       attr_accessor :name, :path, :size, :data, :mode, :id, :commit_id, :loaded_size, :binary
 
@@ -109,10 +109,6 @@ module Gitlab
         @binary.nil? ? super : @binary == true
       end
 
-      def empty?
-        !data || data == ''
-      end
-
       def data
         encode! @data
       end
@@ -130,6 +126,10 @@ module Gitlab
 
       def name
         encode! @name
+      end
+
+      def truncated?
+        size && (size > loaded_size)
       end
 
       # Valid LFS object pointer is a text file consisting of
@@ -153,15 +153,19 @@ module Gitlab
       def lfs_size
         if has_lfs_version_key?
           size = data.match(/(?<=size )([0-9]+)/)
-          return size[1] if size
+          return size[1].to_i if size
         end
 
         nil
       end
 
-      def truncated?
-        size && (size > loaded_size)
+      def external_storage
+        return unless lfs_pointer?
+
+        :lfs
       end
+
+      alias_method :external_size, :lfs_size
 
       private
 

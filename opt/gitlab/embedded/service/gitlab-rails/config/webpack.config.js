@@ -6,43 +6,64 @@ var webpack = require('webpack');
 var StatsPlugin = require('stats-webpack-plugin');
 var CompressionPlugin = require('compression-webpack-plugin');
 var BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+var WatchMissingNodeModulesPlugin = require('react-dev-utils/WatchMissingNodeModulesPlugin');
 
 var ROOT_PATH = path.resolve(__dirname, '..');
 var IS_PRODUCTION = process.env.NODE_ENV === 'production';
 var IS_DEV_SERVER = process.argv[1].indexOf('webpack-dev-server') !== -1;
+var DEV_SERVER_HOST = process.env.DEV_SERVER_HOST || 'localhost';
 var DEV_SERVER_PORT = parseInt(process.env.DEV_SERVER_PORT, 10) || 3808;
 var DEV_SERVER_LIVERELOAD = process.env.DEV_SERVER_LIVERELOAD !== 'false';
 var WEBPACK_REPORT = process.env.WEBPACK_REPORT;
 
 var config = {
+  // because sqljs requires fs.
+  node: {
+    fs: "empty"
+  },
   context: path.join(ROOT_PATH, 'app/assets/javascripts'),
   entry: {
-    common:               './commons/index.js',
-    common_vue:           ['vue', 'vue-resource'],
-    common_d3:            ['d3'],
-    main:                 './main.js',
-    blob_edit:            './blob_edit/blob_edit_bundle.js',
+    blob:                 './blob_edit/blob_bundle.js',
     boards:               './boards/boards_bundle.js',
-    simulate_drag:        './test_utils/simulate_drag.js',
+    common:               './commons/index.js',
+    common_vue:           ['vue', './vue_shared/common_vue.js'],
+    common_d3:            ['d3'],
     cycle_analytics:      './cycle_analytics/cycle_analytics_bundle.js',
     commit_pipelines:     './commit/pipelines/pipelines_bundle.js',
+    deploy_keys:          './deploy_keys/index.js',
     diff_notes:           './diff_notes/diff_notes_bundle.js',
     environments:         './environments/environments_bundle.js',
     environments_folder:  './environments/folder/environments_folder_bundle.js',
     filtered_search:      './filtered_search/filtered_search_bundle.js',
     graphs:               './graphs/graphs_bundle.js',
+    group:                './group.js',
     groups_list:          './groups_list.js',
-    issuable:             './issuable/issuable_bundle.js',
+    issue_show:           './issue_show/index.js',
+    locale:               './locale/index.js',
+    main:                 './main.js',
     merge_conflicts:      './merge_conflicts/merge_conflicts_bundle.js',
-    merge_request_widget: './merge_request_widget/ci_bundle.js',
     monitoring:           './monitoring/monitoring_bundle.js',
     network:              './network/network_bundle.js',
+    notebook_viewer:      './blob/notebook_viewer.js',
+    pdf_viewer:           './blob/pdf_viewer.js',
+    pipelines:            './pipelines/index.js',
+    balsamiq_viewer:      './blob/balsamiq_viewer.js',
+    pipelines_graph:      './pipelines/graph_bundle.js',
     profile:              './profile/profile_bundle.js',
     protected_branches:   './protected_branches/protected_branches_bundle.js',
+    protected_tags:       './protected_tags',
+    sidebar:              './sidebar/sidebar_bundle.js',
+    schedule_form:        './pipeline_schedules/pipeline_schedule_form_bundle.js',
+    schedules_index:      './pipeline_schedules/pipeline_schedules_index_bundle.js',
     snippet:              './snippet/snippet_bundle.js',
+    sketch_viewer:        './blob/sketch_viewer.js',
+    stl_viewer:           './blob/stl_viewer.js',
     terminal:             './terminal/terminal_bundle.js',
+    u2f:                  ['vendor/u2f'],
     users:                './users/users_bundle.js',
-    vue_pipelines:        './vue_pipelines_index/index.js',
+    raven:                './raven/index.js',
+    vue_merge_request_widget: './vue_merge_request_widget/index.js',
+    test:                 './test.js',
   },
 
   output: {
@@ -51,25 +72,37 @@ var config = {
     filename: IS_PRODUCTION ? '[name].[chunkhash].bundle.js' : '[name].bundle.js'
   },
 
-  devtool: 'inline-source-map',
+  devtool: 'cheap-module-source-map',
 
   module: {
     rules: [
       {
-        test: /\.(js|es6)$/,
+        test: /\.js$/,
         exclude: /(node_modules|vendor\/assets)/,
         loader: 'babel-loader',
-        options: {
-          presets: [
-            ["es2015", {"modules": false}],
-            'stage-2'
-          ]
-        }
+      },
+      {
+        test: /\.vue$/,
+        loader: 'vue-loader',
       },
       {
         test: /\.svg$/,
-        use: 'raw-loader'
-      }
+        loader: 'raw-loader',
+      },
+      {
+        test: /\.gif$/,
+        loader: 'url-loader',
+        query: { mimetype: 'image/gif' },
+      },
+      {
+        test: /\.(worker\.js|pdf)$/,
+        exclude: /node_modules/,
+        loader: 'file-loader',
+      },
+      {
+        test: /locale\/[a-z]+\/(.*)\.js$/,
+        loader: 'exports-loader?locales',
+      },
     ]
   },
 
@@ -105,12 +138,22 @@ var config = {
         'boards',
         'commit_pipelines',
         'cycle_analytics',
+        'deploy_keys',
         'diff_notes',
         'environments',
         'environments_folder',
-        'issuable',
+        'filtered_search',
+        'issue_show',
         'merge_conflicts',
-        'vue_pipelines',
+        'notebook_viewer',
+        'pdf_viewer',
+        'pipelines',
+        'balsamiq_viewer',
+        'pipelines_graph',
+        'schedule_form',
+        'schedules_index',
+        'sidebar',
+        'vue_merge_request_widget',
       ],
       minChunks: function(module, count) {
         return module.resource && (/vue_shared/).test(module.resource);
@@ -120,24 +163,36 @@ var config = {
     // create cacheable common library bundle for all d3 chunks
     new webpack.optimize.CommonsChunkPlugin({
       name: 'common_d3',
-      chunks: ['graphs', 'users', 'monitoring'],
+      chunks: [
+        'graphs',
+        'users',
+        'monitoring',
+      ],
     }),
 
     // create cacheable common library bundles
     new webpack.optimize.CommonsChunkPlugin({
       names: ['main', 'common', 'runtime'],
     }),
+
+    // locale common library
+    new webpack.optimize.CommonsChunkPlugin({
+      name: 'locale',
+      chunks: [
+        'cycle_analytics',
+      ],
+    }),
   ],
 
   resolve: {
-    extensions: ['.js', '.es6', '.js.es6'],
+    extensions: ['.js'],
     alias: {
       '~':              path.join(ROOT_PATH, 'app/assets/javascripts'),
       'emojis':         path.join(ROOT_PATH, 'fixtures/emojis'),
       'empty_states':   path.join(ROOT_PATH, 'app/views/shared/empty_states'),
       'icons':          path.join(ROOT_PATH, 'app/views/shared/icons'),
       'vendor':         path.join(ROOT_PATH, 'vendor/assets/javascripts'),
-      'vue$':           'vue/dist/vue.common.js',
+      'vue$':           'vue/dist/vue.esm.js',
     }
   }
 }
@@ -163,13 +218,19 @@ if (IS_PRODUCTION) {
 }
 
 if (IS_DEV_SERVER) {
+  config.devtool = 'cheap-module-eval-source-map';
   config.devServer = {
+    host: DEV_SERVER_HOST,
     port: DEV_SERVER_PORT,
     headers: { 'Access-Control-Allow-Origin': '*' },
     stats: 'errors-only',
     inline: DEV_SERVER_LIVERELOAD
   };
-  config.output.publicPath = '//localhost:' + DEV_SERVER_PORT + config.output.publicPath;
+  config.output.publicPath = '//' + DEV_SERVER_HOST + ':' + DEV_SERVER_PORT + config.output.publicPath;
+  config.plugins.push(
+    // watch node_modules for changes if we encounter a missing module compile error
+    new WatchMissingNodeModulesPlugin(path.join(ROOT_PATH, 'node_modules'))
+  );
 }
 
 if (WEBPACK_REPORT) {

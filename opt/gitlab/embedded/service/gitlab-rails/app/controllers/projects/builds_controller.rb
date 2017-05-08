@@ -1,7 +1,11 @@
 class Projects::BuildsController < Projects::ApplicationController
   before_action :build, except: [:index, :cancel_all]
-  before_action :authorize_read_build!, except: [:cancel, :cancel_all, :retry, :play]
-  before_action :authorize_update_build!, except: [:index, :show, :status, :raw, :trace]
+
+  before_action :authorize_read_build!,
+    only: [:index, :show, :status, :raw, :trace]
+  before_action :authorize_update_build!,
+    except: [:index, :show, :status, :raw, :trace, :cancel_all]
+
   layout 'project'
 
   def index
@@ -19,11 +23,21 @@ class Projects::BuildsController < Projects::ApplicationController
       else
         @builds
       end
+    @builds = @builds.includes([
+      { pipeline: :project },
+      :project,
+      :tags
+    ])
     @builds = @builds.page(params[:page]).per(30)
   end
 
   def cancel_all
-    @project.builds.running_or_pending.each(&:cancel)
+    return access_denied! unless can?(current_user, :update_build, project)
+
+    @project.builds.running_or_pending.each do |build|
+      build.cancel if can?(current_user, :update_build, build)
+    end
+
     redirect_to namespace_project_builds_path(project.namespace, project)
   end
 
@@ -31,70 +45,84 @@ class Projects::BuildsController < Projects::ApplicationController
     @builds = @project.pipelines.find_by_sha(@build.sha).builds.order('id DESC')
     @builds = @builds.where("id not in (?)", @build.id)
     @pipeline = @build.pipeline
-
-    respond_to do |format|
-      format.html
-      format.json do
-        render json: {
-          id: @build.id,
-          status: @build.status,
-          trace_html: @build.trace_html
-        }
-      end
-    end
   end
 
   def trace
-    respond_to do |format|
-      format.json do
-        state = params[:state].presence
-        render json: @build.trace_with_state(state: state).
-          merge!(id: @build.id, status: @build.status)
+    build.trace.read do |stream|
+      respond_to do |format|
+        format.json do
+          result = {
+            id: @build.id, status: @build.status, complete: @build.complete?
+          }
+
+          if stream.valid?
+            stream.limit
+            state = params[:state].presence
+            trace = stream.html_with_state(state)
+            result.merge!(trace.to_h)
+          end
+
+          render json: result
+        end
       end
     end
   end
 
   def retry
-    return render_404 unless @build.retryable?
+    return respond_422 unless @build.retryable?
 
     build = Ci::Build.retry(@build, current_user)
     redirect_to build_path(build)
   end
 
   def play
-    return render_404 unless @build.playable?
+    return respond_422 unless @build.playable?
 
     build = @build.play(current_user)
     redirect_to build_path(build)
   end
 
   def cancel
+    return respond_422 unless @build.cancelable?
+
     @build.cancel
     redirect_to build_path(@build)
   end
 
   def status
-    render json: @build.to_json(only: [:status, :id, :sha, :coverage], methods: :sha)
+    render json: BuildSerializer
+      .new(project: @project, current_user: @current_user)
+      .represent_status(@build)
   end
 
   def erase
-    @build.erase(erased_by: current_user)
-    redirect_to namespace_project_build_path(project.namespace, project, @build),
+    if @build.erase(erased_by: current_user)
+      redirect_to namespace_project_build_path(project.namespace, project, @build),
                 notice: "Build has been successfully erased!"
+    else
+      respond_422
+    end
   end
 
   def raw
-    if @build.has_trace_file?
-      send_file @build.trace_file_path, type: 'text/plain; charset=utf-8', disposition: 'inline'
-    else
-      render_404
+    build.trace.read do |stream|
+      if stream.file?
+        send_file stream.path, type: 'text/plain; charset=utf-8', disposition: 'inline'
+      else
+        render_404
+      end
     end
   end
 
   private
 
+  def authorize_update_build!
+    return access_denied! unless can?(current_user, :update_build, build)
+  end
+
   def build
-    @build ||= project.builds.find_by!(id: params[:id]).present(current_user: current_user)
+    @build ||= project.builds.find(params[:id])
+      .present(current_user: current_user)
   end
 
   def build_path(build)

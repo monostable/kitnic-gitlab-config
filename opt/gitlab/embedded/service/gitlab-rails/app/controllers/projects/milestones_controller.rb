@@ -1,26 +1,32 @@
 class Projects::MilestonesController < Projects::ApplicationController
+  include MilestoneActions
+
   before_action :module_enabled
-  before_action :milestone, only: [:edit, :update, :destroy, :show, :sort_issues, :sort_merge_requests]
+  before_action :milestone, only: [:edit, :update, :destroy, :show, :sort_issues, :sort_merge_requests, :merge_requests, :participants, :labels]
 
   # Allow read any milestone
   before_action :authorize_read_milestone!
 
   # Allow admin milestone
-  before_action :authorize_admin_milestone!, except: [:index, :show]
+  before_action :authorize_admin_milestone!, except: [:index, :show, :merge_requests, :participants, :labels]
 
   respond_to :html
 
   def index
     @milestones =
       case params[:state]
-      when 'all' then @project.milestones.reorder(due_date: :desc, title: :asc)
-      when 'closed' then @project.milestones.closed.reorder(due_date: :desc, title: :asc)
-      else @project.milestones.active.reorder(due_date: :asc, title: :asc)
+      when 'all' then @project.milestones
+      when 'closed' then @project.milestones.closed
+      else @project.milestones.active
       end
 
-    @milestones = @milestones.includes(:project)
+    @sort = params[:sort] || 'due_date_asc'
+    @milestones = @milestones.sort(@sort)
+
     respond_to do |format|
       format.html do
+        @project_namespace = @project.namespace.becomes(Namespace)
+        @milestones = @milestones.includes(:project)
         @milestones = @milestones.page(params[:page])
       end
       format.json do

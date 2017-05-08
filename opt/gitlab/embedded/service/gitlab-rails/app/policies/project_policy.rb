@@ -2,20 +2,13 @@ class ProjectPolicy < BasePolicy
   def rules
     team_access!(user)
 
-    owner = project.owner == user ||
-      (project.group && project.group.has_owner?(user))
-
-    owner_access! if user.admin? || owner
-    team_member_owner_access! if owner
+    owner_access! if user.admin? || owner?
+    team_member_owner_access! if owner?
 
     if project.public? || (project.internal? && !user.external?)
       guest_access!
       public_access!
-
-      if project.request_access_enabled &&
-          !(owner || user.admin? || project.team.member?(user) || project_group_member?(user))
-        can! :request_access
-      end
+      can! :request_access if access_requestable?
     end
 
     archived_access! if project.archived?
@@ -25,6 +18,13 @@ class ProjectPolicy < BasePolicy
 
   def project
     @subject
+  end
+
+  def owner?
+    return @owner if defined?(@owner)
+
+    @owner = project.owner == user ||
+      (project.group && project.group.has_owner?(user))
   end
 
   def guest_access!
@@ -46,6 +46,7 @@ class ProjectPolicy < BasePolicy
 
     if project.public_builds?
       can! :read_pipeline
+      can! :read_pipeline_schedule
       can! :read_build
     end
   end
@@ -63,6 +64,7 @@ class ProjectPolicy < BasePolicy
     can! :read_build
     can! :read_container_image
     can! :read_pipeline
+    can! :read_pipeline_schedule
     can! :read_environment
     can! :read_deployment
     can! :read_merge_request
@@ -83,6 +85,8 @@ class ProjectPolicy < BasePolicy
     can! :update_build
     can! :create_pipeline
     can! :update_pipeline
+    can! :create_pipeline_schedule
+    can! :update_pipeline_schedule
     can! :create_merge_request
     can! :create_wiki
     can! :push_code
@@ -108,6 +112,7 @@ class ProjectPolicy < BasePolicy
     can! :admin_build
     can! :admin_container_image
     can! :admin_pipeline
+    can! :admin_pipeline_schedule
     can! :admin_environment
     can! :admin_deployment
     can! :admin_pages
@@ -120,6 +125,7 @@ class ProjectPolicy < BasePolicy
     can! :fork_project
     can! :read_commit_status
     can! :read_pipeline
+    can! :read_pipeline_schedule
     can! :read_container_image
     can! :build_download_code
     can! :build_read_container_image
@@ -198,6 +204,7 @@ class ProjectPolicy < BasePolicy
     unless project.feature_available?(:builds, user) && repository_enabled
       cannot!(*named_abilities(:build))
       cannot!(*named_abilities(:pipeline))
+      cannot!(*named_abilities(:pipeline_schedule))
       cannot!(*named_abilities(:environment))
       cannot!(*named_abilities(:deployment))
     end
@@ -226,14 +233,6 @@ class ProjectPolicy < BasePolicy
     disabled_features!
   end
 
-  def project_group_member?(user)
-    project.group &&
-      (
-        project.group.members_with_parents.exists?(user_id: user.id) ||
-        project.group.requesters.exists?(user_id: user.id)
-      )
-  end
-
   def block_issues_abilities
     unless project.feature_available?(:issues, user)
       cannot! :read_issue if project.default_issues_tracker?
@@ -254,6 +253,22 @@ class ProjectPolicy < BasePolicy
 
   private
 
+  def project_group_member?(user)
+    project.group &&
+      (
+        project.group.members_with_parents.exists?(user_id: user.id) ||
+        project.group.requesters.exists?(user_id: user.id)
+      )
+  end
+
+  def access_requestable?
+    project.request_access_enabled &&
+      !owner? &&
+      !user.admin? &&
+      !project.team.member?(user) &&
+      !project_group_member?(user)
+  end
+
   # A base set of abilities for read-only users, which
   # is then augmented as necessary for anonymous and other
   # read-only users.
@@ -269,6 +284,7 @@ class ProjectPolicy < BasePolicy
     can! :read_merge_request
     can! :read_note
     can! :read_pipeline
+    can! :read_pipeline_schedule
     can! :read_commit_status
     can! :read_container_image
     can! :download_code

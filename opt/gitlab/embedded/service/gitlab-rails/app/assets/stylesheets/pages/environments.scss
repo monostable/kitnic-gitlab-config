@@ -18,12 +18,15 @@
 .environments-container {
   .table-holder {
     width: 100%;
-    overflow: auto;
+
+    @media (max-width: $screen-sm-max) {
+      overflow: auto;
+    }
   }
 
   .table.ci-table {
     .environments-actions {
-      min-width: 200px;
+      min-width: 300px;
     }
 
     .environments-commit,
@@ -141,12 +144,31 @@
         margin-right: 0;
       }
     }
+
+    .no-btn {
+      border: none;
+      background: none;
+      outline: none;
+      width: 100%;
+      text-align: left;
+    }
   }
 }
 
 .prometheus-graph {
   text {
-    fill: $stat-graph-axis-fill;
+    fill: $gl-text-color;
+    stroke-width: 0;
+  }
+
+  .label-axis-text,
+  .text-metric-usage {
+    fill: $black;
+    font-weight: 500;
+  }
+
+  .legend-axis-text {
+    fill: $black;
   }
 }
 
@@ -189,25 +211,49 @@
 .rect-text-metric {
   fill: $white-light;
   stroke-width: 1;
-  stroke: $black;
+  stroke: $gray-darkest;
 }
 
 .rect-axis-text {
   fill: $white-light;
 }
 
-.text-metric,
-.text-median-metric,
-.text-metric-usage,
-.text-metric-date {
-  fill: $black;
-}
-
-.text-metric-date {
-  font-weight: 200;
+.text-metric {
+  font-weight: 600;
 }
 
 .selected-metric-line {
-  stroke: $black;
+  stroke: $gl-gray-dark;
   stroke-width: 1;
+}
+
+.deployment-line {
+  stroke: $black;
+  stroke-width: 2;
+}
+
+.deploy-info-text {
+  dominant-baseline: text-before-edge;
+}
+
+.text-metric-bold {
+  font-weight: 600;
+}
+
+.prometheus-state {
+  margin-top: 10px;
+  display: none;
+
+  .state-button-section {
+    margin-top: 10px;
+  }
+}
+
+.environments-actions {
+  .external-url,
+  .monitoring-url,
+  .terminal-button,
+  .stop-env-link {
+    width: 38px;
+  }
 }

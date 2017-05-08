@@ -1,7 +1,9 @@
 class Projects::SnippetsController < Projects::ApplicationController
+  include RendersNotes
   include ToggleAwardEmoji
   include SpammableActions
   include SnippetsActions
+  include RendersBlob
 
   before_action :module_enabled
   before_action :snippet, only: [:show, :edit, :destroy, :update, :raw, :toggle_award_emoji, :mark_as_spam]
@@ -21,12 +23,11 @@ class Projects::SnippetsController < Projects::ApplicationController
   respond_to :html
 
   def index
-    @snippets = SnippetsFinder.new.execute(
+    @snippets = SnippetsFinder.new(
       current_user,
-      filter: :by_project,
       project: @project,
       scope: params[:scope]
-    )
+    ).execute
     @snippets = @snippets.page(params[:page])
     if @snippets.out_of_range? && @snippets.total_pages != 0
       redirect_to namespace_project_snippets_path(page: @snippets.total_pages)
@@ -54,9 +55,23 @@ class Projects::SnippetsController < Projects::ApplicationController
   end
 
   def show
-    @note = @project.notes.new(noteable: @snippet)
-    @notes = Banzai::NoteRenderer.render(@snippet.notes.fresh, @project, current_user)
-    @noteable = @snippet
+    blob = @snippet.blob
+    override_max_blob_size(blob)
+
+    respond_to do |format|
+      format.html do
+        @note = @project.notes.new(noteable: @snippet)
+        @noteable = @snippet
+
+        @discussions = @snippet.discussions
+        @notes = prepare_notes_for_rendering(@discussions.flat_map(&:notes))
+        render 'show'
+      end
+
+      format.json do
+        render_blob_json(blob)
+      end
+    end
   end
 
   def destroy

@@ -8,6 +8,10 @@ module Gitlab
     class Repository
       include Gitlab::Git::Popen
 
+      ALLOWED_OBJECT_DIRECTORIES_VARIABLES = %w[
+        GIT_OBJECT_DIRECTORY
+        GIT_ALTERNATE_OBJECT_DIRECTORIES
+      ].freeze
       SEARCH_CONTEXT_LINES = 3
 
       NoRepository = Class.new(StandardError)
@@ -23,11 +27,17 @@ module Gitlab
       # Rugged repo object
       attr_reader :rugged
 
+      attr_reader :storage
+
       # 'path' must be the path to a _bare_ git repository, e.g.
       # /path/to/my-repo.git
-      def initialize(path)
-        @path = path
-        @name = path.split("/").last
+      def initialize(storage, relative_path)
+        @storage = storage
+        @relative_path = relative_path
+
+        storage_path = Gitlab.config.repositories.storages[@storage]['path']
+        @path = File.join(storage_path, @relative_path)
+        @name = @relative_path.split("/").last
         @attributes = Gitlab::Git::Attributes.new(path)
       end
 
@@ -37,7 +47,13 @@ module Gitlab
 
       # Default branch in the repository
       def root_ref
-        @root_ref ||= discover_default_branch
+        @root_ref ||= gitaly_migrate(:root_ref) do |is_enabled|
+          if is_enabled
+            gitaly_ref_client.default_branch_name
+          else
+            discover_default_branch
+          end
+        end
       end
 
       # Alias to old method for compatibility
@@ -46,7 +62,7 @@ module Gitlab
       end
 
       def rugged
-        @rugged ||= Rugged::Repository.new(path)
+        @rugged ||= Rugged::Repository.new(path, alternates: alternate_object_directories)
       rescue Rugged::RepositoryError, Rugged::OSError
         raise NoRepository.new('no repository for such path')
       end
@@ -54,7 +70,13 @@ module Gitlab
       # Returns an Array of branch names
       # sorted by name ASC
       def branch_names
-        branches.map(&:name)
+        gitaly_migrate(:branch_names) do |is_enabled|
+          if is_enabled
+            gitaly_ref_client.branch_names
+          else
+            branches.map(&:name)
+          end
+        end
       end
 
       # Returns an Array of Branches
@@ -94,20 +116,43 @@ module Gitlab
 
       # Returns the number of valid branches
       def branch_count
-        rugged.branches.count do |ref|
-          begin
-            ref.name && ref.target # ensures the branch is valid
+        Gitlab::GitalyClient.migrate(:branch_names) do |is_enabled|
+          if is_enabled
+            gitaly_ref_client.count_branch_names
+          else
+            rugged.branches.count do |ref|
+              begin
+                ref.name && ref.target # ensures the branch is valid
 
-            true
-          rescue Rugged::ReferenceError
-            false
+                true
+              rescue Rugged::ReferenceError
+                false
+              end
+            end
+          end
+        end
+      end
+
+      # Returns the number of valid tags
+      def tag_count
+        Gitlab::GitalyClient.migrate(:tag_names) do |is_enabled|
+          if is_enabled
+            gitaly_ref_client.count_tag_names
+          else
+            rugged.tags.count
           end
         end
       end
 
       # Returns an Array of tag names
       def tag_names
-        rugged.tags.map { |t| t.name }
+        gitaly_migrate(:tag_names) do |is_enabled|
+          if is_enabled
+            gitaly_ref_client.tag_names
+          else
+            rugged.tags.map { |t| t.name }
+          end
+        end
       end
 
       # Returns an Array of Tags
@@ -320,7 +365,7 @@ module Gitlab
       def log_by_walk(sha, options)
         walk_options = {
           show: sha,
-          sort: Rugged::SORT_DATE,
+          sort: Rugged::SORT_NONE,
           limit: options[:limit],
           offset: options[:offset]
         }
@@ -346,7 +391,12 @@ module Gitlab
         cmd << "--after=#{options[:after].iso8601}" if options[:after]
         cmd << "--before=#{options[:before].iso8601}" if options[:before]
         cmd << sha
-        cmd += %W[-- #{options[:path]}] if options[:path].present?
+
+        # :path can be a string or an array of strings
+        if options[:path].present?
+          cmd << '--'
+          cmd += Array(options[:path])
+        end
 
         raw_output = IO.popen(cmd) { |io| io.read }
         lines = offset_in_ruby ? raw_output.lines.drop(offset) : raw_output.lines
@@ -382,7 +432,7 @@ module Gitlab
       # a detailed list of valid arguments.
       def commits_between(from, to)
         walker = Rugged::Walker.new(rugged)
-        walker.sorting(Rugged::SORT_DATE | Rugged::SORT_REVERSE)
+        walker.sorting(Rugged::SORT_NONE | Rugged::SORT_REVERSE)
 
         sha_from = sha_from_ref(from)
         sha_to = sha_from_ref(to)
@@ -406,12 +456,34 @@ module Gitlab
         rugged.merge_base(from, to)
       end
 
+      # Returns true is +from+ is direct ancestor to +to+, otherwise false
+      def is_ancestor?(from, to)
+        gitaly_commit_client.is_ancestor(from, to)
+      end
+
       # Return an array of Diff objects that represent the diff
       # between +from+ and +to+.  See Diff::filter_diff_options for the allowed
       # diff options.  The +options+ hash can also include :break_rewrites to
       # split larger rewrites into delete/add pairs.
       def diff(from, to, options = {}, *paths)
         Gitlab::Git::DiffCollection.new(diff_patches(from, to, options, *paths), options)
+      end
+
+      # Returns a RefName for a given SHA
+      def ref_name_for_sha(ref_path, sha)
+        raise ArgumentError, "sha can't be empty" unless sha.present?
+
+        gitaly_migrate(:find_ref_name) do |is_enabled|
+          if is_enabled
+            gitaly_ref_client.find_ref_name(sha, ref_path)
+          else
+            args = %W(#{Gitlab.config.git.bin_path} for-each-ref --count=1 #{ref_path} --contains #{sha})
+
+            # Not found -> ["", 0]
+            # Found -> ["b8d95eb4969eefacb0a58f6a28f6803f8070e7b9 commit\trefs/environments/production/77\n", 0]
+            Gitlab::Popen.popen(args, @path).first.split.last
+          end
+        end
       end
 
       # Returns commits collection
@@ -429,7 +501,10 @@ module Gitlab
       #     :contains is the commit contained by the refs from which to begin (SHA1 or name)
       #     :max_count is the maximum number of commits to fetch
       #     :skip is the number of commits to skip
-      #     :order is the commits order and allowed value is :date(default) or :topo
+      #     :order is the commits order and allowed value is :none (default), :date,
+      #        :topo, or any combination of them (in an array). Commit ordering types
+      #        are documented here:
+      #        http://www.rubydoc.info/github/libgit2/rugged/Rugged#SORT_NONE-constant)
       #
       def find_commits(options = {})
         actual_options = options.dup
@@ -457,11 +532,8 @@ module Gitlab
           end
         end
 
-        if actual_options[:order] == :topo
-          walker.sorting(Rugged::SORT_TOPO)
-        else
-          walker.sorting(Rugged::SORT_DATE)
-        end
+        sort_type = rugged_sort_type(actual_options[:order])
+        walker.sorting(sort_type)
 
         commits = []
         offset = actual_options[:skip]
@@ -807,44 +879,6 @@ module Gitlab
         rugged.remotes[remote_name].push(refspecs)
       end
 
-      # Merge the +source_name+ branch into the +target_name+ branch. This is
-      # equivalent to `git merge --no_ff +source_name+`, since a merge commit
-      # is always created.
-      def merge(source_name, target_name, options = {})
-        our_commit = rugged.branches[target_name].target
-        their_commit = rugged.branches[source_name].target
-
-        raise "Invalid merge target" if our_commit.nil?
-        raise "Invalid merge source" if their_commit.nil?
-
-        merge_index = rugged.merge_commits(our_commit, their_commit)
-        return false if merge_index.conflicts?
-
-        actual_options = options.merge(
-          parents: [our_commit, their_commit],
-          tree: merge_index.write_tree(rugged),
-          update_ref: "refs/heads/#{target_name}"
-        )
-        Rugged::Commit.create(rugged, actual_options)
-      end
-
-      def commits_since(from_date)
-        walker = Rugged::Walker.new(rugged)
-        walker.sorting(Rugged::SORT_DATE | Rugged::SORT_REVERSE)
-
-        rugged.references.each("refs/heads/*") do |ref|
-          walker.push(ref.target_id)
-        end
-
-        commits = []
-        walker.each do |commit|
-          break if commit.author[:time].to_date < from_date
-          commits.push(commit)
-        end
-
-        commits
-      end
-
       AUTOCRLF_VALUES = {
         "true" => true,
         "false" => false,
@@ -932,7 +966,15 @@ module Gitlab
         @attributes.attributes(path)
       end
 
+      def gitaly_repository
+        Gitlab::GitalyClient::Util.repository(@storage, @relative_path)
+      end
+
       private
+
+      def alternate_object_directories
+        Gitlab::Git::Env.all.values_at(*ALLOWED_OBJECT_DIRECTORIES_VARIABLES).compact
+      end
 
       # Get the content of a blob for a given commit.  If the blob is a commit
       # (for submodules) then return the blob's OID.
@@ -1208,6 +1250,36 @@ module Gitlab
         diff = rugged.diff(from, to, actual_options)
         diff.find_similar!(break_rewrites: break_rewrites)
         diff.each_patch
+      end
+
+      def gitaly_ref_client
+        @gitaly_ref_client ||= Gitlab::GitalyClient::Ref.new(self)
+      end
+
+      def gitaly_commit_client
+        @gitaly_commit_client ||= Gitlab::GitalyClient::Commit.new(self)
+      end
+
+      def gitaly_migrate(method, &block)
+        Gitlab::GitalyClient.migrate(method, &block)
+      rescue GRPC::NotFound => e
+        raise NoRepository.new(e)
+      rescue GRPC::BadStatus => e
+        raise CommandError.new(e)
+      end
+
+      # Returns the `Rugged` sorting type constant for one or more given
+      # sort types. Valid keys are `:none`, `:topo`, and `:date`, or an array
+      # containing more than one of them. `:date` uses a combination of date and
+      # topological sorting to closer mimic git's native ordering.
+      def rugged_sort_type(sort_type)
+        @rugged_sort_types ||= {
+          none: Rugged::SORT_NONE,
+          topo: Rugged::SORT_TOPO,
+          date: Rugged::SORT_DATE | Rugged::SORT_TOPO
+        }
+
+        @rugged_sort_types.fetch(sort_type, Rugged::SORT_NONE)
       end
     end
   end

@@ -1,5 +1,6 @@
 - page_title    'New Project'
 - header_title  "Projects", dashboard_projects_path
+- visibility_level = params.dig(:project, :visibility_level) || default_project_visibility
 
 .project-edit-container
   .project-edit-errors
@@ -22,7 +23,7 @@
                 - if current_user.can_select_namespace?
                   .input-group-addon
                     = root_url
-                  = f.select :namespace_id, namespaces_options(namespace_id_from(params) || :current_user, display_path: true), {}, {class: 'select2 js-select-namespace', tabindex: 1}
+                  = f.select :namespace_id, namespaces_options(namespace_id_from(params) || :current_user, display_path: true, extra_group: namespace_id_from(params)), {}, { class: 'select2 js-select-namespace', tabindex: 1}
 
                 - else
                   .input-group-addon.static-namespace
@@ -75,9 +76,9 @@
                       Gitea
                 %div
                   - if git_import_enabled?
-                    = link_to "#", class: 'btn js-toggle-button import_git' do
+                    %button.btn.js-toggle-button.import_git{ type: "button" }
                       = icon('git', text: 'Repo by URL')
-                .import_gitlab_project
+                .import_gitlab_project.has-tooltip{ data: { container: 'body' } }
                   - if gitlab_project_import_enabled?
                     = link_to new_import_gitlab_project_path, class: 'btn btn_import_gitlab_project project-submit' do
                       = icon('gitlab', text: 'GitLab export')
@@ -95,7 +96,7 @@
           = f.label :visibility_level, class: 'label-light' do
             Visibility Level
             = link_to icon('question-circle'), help_page_path("public_access/public_access")
-          = render 'shared/visibility_level', f: f, visibility_level: default_project_visibility, can_change_visibility_level: true, form_model: @project, with_label: false
+          = render 'shared/visibility_level', f: f, visibility_level: visibility_level.to_i, can_change_visibility_level: true, form_model: @project, with_label: false
 
         = f.submit 'Create project', class: "btn btn-create project-submit", tabindex: 4
         = link_to 'Cancel', dashboard_projects_path, class: 'btn btn-cancel'
@@ -108,6 +109,9 @@
     %p Please wait a moment, this page will automatically refresh when ready.
 
 :javascript
+  var importBtnTooltip = "Please enter a valid project name.";
+  var $importBtnWrapper = $('.import_gitlab_project');
+
   $('.how_to_import_link').bind('click', function (e) {
     e.preventDefault();
     var import_modal = $(this).next(".modal").show();
@@ -122,15 +126,8 @@
     $(".btn_import_gitlab_project").attr("href", _href + '?namespace_id=' + $("#project_namespace_id").val() + '&path=' + $("#project_path").val());
   });
 
-  $('.btn_import_gitlab_project').attr('disabled',true)
-  $('.import_gitlab_project').attr('title', 'Project path and name required.');
-
-  $('.import_gitlab_project').click(function( event ) {
-    if($('.btn_import_gitlab_project').attr('disabled')) {
-      event.preventDefault();
-      new Flash("Please enter path and name for the project to be imported to.");
-    }
-  });
+  $('.btn_import_gitlab_project').attr('disabled', $('#project_path').val().trim().length === 0);
+  $importBtnWrapper.attr('title', importBtnTooltip);
 
   $('#new_project').submit(function(){
     var $path = $('#project_path');
@@ -138,17 +135,18 @@
   });
 
   $('#project_path').keyup(function(){
-    if($(this).val().length !=0) {
+    if($(this).val().trim().length !== 0) {
       $('.btn_import_gitlab_project').attr('disabled', false);
-      $('.import_gitlab_project').attr('title','');
-      $(".flash-container").html("")
+      $importBtnWrapper.attr('title','');
+      $importBtnWrapper.removeClass('has-tooltip');
     } else {
       $('.btn_import_gitlab_project').attr('disabled',true);
-      $('.import_gitlab_project').attr('title', 'Project path and name required.');
+      $importBtnWrapper.addClass('has-tooltip');
     }
   });
 
+  $('#project_import_url').disable();
   $('.import_git').click(function( event ) {
-    $projectImportUrl = $('#project_import_url')
-    $projectImportUrl.attr('disabled', !$projectImportUrl.attr('disabled'))
+    $projectImportUrl = $('#project_import_url');
+    $projectImportUrl.attr('disabled', !$projectImportUrl.attr('disabled'));
   });

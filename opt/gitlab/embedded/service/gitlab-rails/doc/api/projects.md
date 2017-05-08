@@ -18,6 +18,7 @@ Constants for project visibility levels are next:
   The project can be cloned without any authentication.
 
 
+
 ## List projects
 
 Get a list of visible projects for authenticated user. When being accessed without authentication, all public projects are returned.
@@ -39,6 +40,7 @@ Parameters:
 | `owned` | boolean | no | Limit by projects owned by the current user |
 | `membership` | boolean | no | Limit by projects that the current user is a member of |
 | `starred` | boolean | no | Limit by projects starred by the current user |
+| `statistics` | boolean | no | Include project statistics |
 
 ```json
 [
@@ -90,7 +92,14 @@ Parameters:
     "shared_with_groups": [],
     "only_allow_merge_if_pipeline_succeeds": false,
     "only_allow_merge_if_all_discussions_are_resolved": false,
-    "request_access_enabled": false
+    "request_access_enabled": false,
+    "statistics": {
+      "commit_count": 37,
+      "storage_size": 1038090,
+      "repository_size": 1038090,
+      "lfs_objects_size": 0,
+      "job_artifacts_size": 0
+    }
   },
   {
     "id": 6,
@@ -150,15 +159,21 @@ Parameters:
     "shared_with_groups": [],
     "only_allow_merge_if_pipeline_succeeds": false,
     "only_allow_merge_if_all_discussions_are_resolved": false,
-    "request_access_enabled": false
+    "request_access_enabled": false,
+    "statistics": {
+      "commit_count": 12,
+      "storage_size": 2066080,
+      "repository_size": 2066080,
+      "lfs_objects_size": 0,
+      "job_artifacts_size": 0
+    }
   }
 ]
 ```
 
 ### Get single project
 
-Get a specific project, identified by project ID or NAMESPACE/PROJECT_NAME, which is owned by the authenticated user.
-If using namespaced projects call make sure that the NAMESPACE/PROJECT_NAME is URL-encoded, eg. `/api/v3/projects/diaspora%2Fdiaspora` (where `/` is represented by `%2F`). This endpoint can be accessed without authentication if
+Get a specific project. This endpoint can be accessed without authentication if
 the project is publicly accessible.
 
 ```
@@ -169,7 +184,8 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or NAMESPACE/PROJECT_NAME of the project |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
+| `statistics` | boolean | no | Include project statistics |
 
 ```json
 {
@@ -241,7 +257,14 @@ Parameters:
   ],
   "only_allow_merge_if_pipeline_succeeds": false,
   "only_allow_merge_if_all_discussions_are_resolved": false,
-  "request_access_enabled": false
+  "request_access_enabled": false,
+  "statistics": {
+    "commit_count": 37,
+    "storage_size": 1038090,
+    "repository_size": 1038090,
+    "lfs_objects_size": 0,
+    "job_artifacts_size": 0
+  }
 }
 ```
 
@@ -295,7 +318,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or NAMESPACE/PROJECT_NAME of the project |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ```json
 [
@@ -497,7 +520,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or NAMESPACE/PROJECT_NAME of the project |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `name` | string | yes | The name of the project |
 | `path` | string | no | Custom repository name for the project. By default generated based on name |
 | `default_branch` | string | no | `master` by default |
@@ -529,7 +552,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or NAMESPACE/PROJECT_NAME of the project |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `namespace` | integer/string | yes | The ID or path of the namespace that the project will be forked to |
 
 ### Star a project
@@ -544,7 +567,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID or NAMESPACE/PROJECT_NAME of the project |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ```bash
 curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects/5/star"
@@ -609,7 +632,7 @@ POST /projects/:id/unstar
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ```bash
 curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects/5/unstar"
@@ -675,7 +698,7 @@ POST /projects/:id/archive
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ```bash
 curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects/5/archive"
@@ -757,7 +780,7 @@ POST /projects/:id/unarchive
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ```bash
 curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects/5/unarchive"
@@ -840,7 +863,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ## Uploads
 
@@ -856,8 +879,19 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `file` | string | yes | The file to be uploaded |
+
+To upload a file from your filesystem, use the `--form` argument. This causes
+cURL to post data using the header `Content-Type: multipart/form-data`.
+The `file=` parameter must point to a file on your filesystem and be preceded
+by `@`. For example:
+
+```bash
+curl --request POST --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" --form "file=@dk.png" https://gitlab.example.com/api/v3/projects/5/uploads
+```
+
+Returned object:
 
 ```json
 {
@@ -868,8 +902,8 @@ Parameters:
 ```
 
 **Note**: The returned `url` is relative to the project path.
-In Markdown contexts, the link is automatically expanded when the format in `markdown` is used.
-
+In Markdown contexts, the link is automatically expanded when the format in
+`markdown` is used.
 
 ## Project members
 
@@ -887,7 +921,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `group_id` | integer | yes | The ID of the group to share with |
 | `group_access` | integer | yes | The permissions level to grant the group |
 | `expires_at` | string | no | Share expiration date in ISO 8601 format: 2016-09-26 |
@@ -904,7 +938,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `group_id` | integer | yes | The ID of the group |
 
 ```bash
@@ -928,7 +962,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ### Get project hook
 
@@ -942,7 +976,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `hook_id` | integer | yes | The ID of a project hook |
 
 ```json
@@ -975,7 +1009,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `url` | string | yes | The hook URL |
 | `push_events` | boolean | no | Trigger hook on push events |
 | `issues_events` | boolean | no | Trigger hook on issues events |
@@ -1000,7 +1034,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `hook_id` | integer | yes | The ID of the project hook |
 | `url` | string | yes | The hook URL |
 | `push_events` | boolean | no | Trigger hook on push events |
@@ -1027,7 +1061,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `hook_id` | integer | yes | The ID of the project hook |
 
 Note the JSON response differs if the hook is available or not. If the project hook
@@ -1049,7 +1083,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ```json
 [
@@ -1106,7 +1140,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `branch` | string | yes | The name of the branch |
 | `developers_can_push` | boolean | no | Flag if developers can push to the branch |
 | `developers_can_merge` | boolean | no | Flag if developers can merge to the branch |
@@ -1123,7 +1157,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `branch` | string | yes | The name of the branch |
 
 ### Unprotect single branch
@@ -1138,7 +1172,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `branch` | string | yes | The name of the branch |
 
 ## Admin fork relation
@@ -1155,7 +1189,7 @@ Parameters:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 | `forked_from_id` | ID | yes | The ID of the project that was forked from |
 
 ### Delete an existing forked from relationship
@@ -1168,7 +1202,7 @@ Parameter:
 
 | Attribute | Type | Required | Description |
 | --------- | ---- | -------- | ----------- |
-| `id` | integer/string | yes | The ID of the project or NAMESPACE/PROJECT_NAME |
+| `id` | integer/string | yes | The ID or [URL-encoded path of the project](README.md#namespaced-path-encoding) |
 
 ## Search for projects by name
 

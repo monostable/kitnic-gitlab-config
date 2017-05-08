@@ -62,8 +62,7 @@ module Banzai
 
         nodes.select do |node|
           if node.has_attribute?(project_attr)
-            node_id = node.attr(project_attr).to_i
-            can_read_reference?(user, projects[node_id])
+            can_read_reference?(user, projects[node])
           else
             true
           end
@@ -112,12 +111,12 @@ module Banzai
         per_project
       end
 
-      # Returns a Hash containing objects for an attribute grouped per their
-      # IDs.
+      # Returns a Hash containing objects for an attribute grouped per the
+      # nodes that reference them.
       #
       # The returned Hash uses the following format:
       #
-      #     { id value => row }
+      #     { node => row }
       #
       # nodes - An Array of HTML nodes to process.
       #
@@ -132,10 +131,14 @@ module Banzai
         return {} if nodes.empty?
 
         ids = unique_attribute_values(nodes, attribute)
-        rows = collection_objects_for_ids(collection, ids)
+        collection_objects = collection_objects_for_ids(collection, ids)
+        objects_by_id = collection_objects.index_by(&:id)
 
-        rows.each_with_object({}) do |row, hash|
-          hash[row.id] = row
+        nodes.each_with_object({}) do |node, hash|
+          if node.has_attribute?(attribute)
+            obj = objects_by_id[node.attr(attribute).to_i]
+            hash[node] = obj if obj
+          end
         end
       end
 
@@ -203,14 +206,14 @@ module Banzai
       #
       # The returned Hash uses the following format:
       #
-      #     { project ID => project }
+      #     { node => project }
       #
       def projects_for_nodes(nodes)
         @projects_for_nodes ||=
           grouped_objects_for_nodes(nodes, Project, 'data-project')
       end
 
-      def can?(user, permission, subject)
+      def can?(user, permission, subject = :global)
         Ability.allowed?(user, permission, subject)
       end
 

@@ -160,10 +160,15 @@ module ProjectsHelper
   end
 
   def project_list_cache_key(project)
-    key = [project.namespace.cache_key, project.cache_key, controller.controller_name, controller.action_name, current_application_settings.cache_key, 'v2.3']
+    key = [project.namespace.cache_key, project.cache_key, controller.controller_name, controller.action_name, current_application_settings.cache_key, 'v2.4']
     key << pipeline_status_cache_key(project.pipeline_status) if project.pipeline_status.has_status?
 
     key
+  end
+
+  def load_pipeline_status(projects)
+    Gitlab::Cache::Ci::ProjectPipelineStatus.
+      load_in_batch_for_projects(projects)
   end
 
   private
@@ -272,14 +277,14 @@ module ProjectsHelper
     end
   end
 
-  def add_special_file_path(project, file_name:, commit_message: nil, target_branch: nil, context: nil)
+  def add_special_file_path(project, file_name:, commit_message: nil, branch_name: nil, context: nil)
     namespace_project_new_blob_path(
       project.namespace,
       project,
       project.default_branch || 'master',
       file_name:      file_name,
       commit_message: commit_message || "Add #{file_name.downcase}",
-      target_branch: target_branch,
+      branch_name: branch_name,
       context: context
     )
   end

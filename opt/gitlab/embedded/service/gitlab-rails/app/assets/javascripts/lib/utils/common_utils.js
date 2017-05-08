@@ -2,6 +2,8 @@
 (function() {
   (function(w) {
     var base;
+    const faviconEl = document.getElementById('favicon');
+    const originalFavicon = faviconEl ? faviconEl.getAttribute('href') : null;
     w.gl || (w.gl = {});
     (base = w.gl).utils || (base.utils = {});
     w.gl.utils.isInGroupsPage = function() {
@@ -33,6 +35,14 @@
       });
     };
 
+    w.gl.utils.ajaxPost = function(url, data) {
+      return $.ajax({
+        type: 'POST',
+        url: url,
+        data: data,
+      });
+    };
+
     w.gl.utils.extractLast = function(term) {
       return this.split(term).pop();
     };
@@ -43,6 +53,10 @@
       } else {
         return val;
       }
+    };
+
+    gl.utils.updateTooltipTitle = function($tooltipEl, newTitle) {
+      return $tooltipEl.attr('title', newTitle).tooltip('fixTitle');
     };
 
     w.gl.utils.disableButtonIfEmptyField = function(field_selector, button_selector, event_name) {
@@ -163,7 +177,10 @@
     w.gl.utils.getSelectedFragment = () => {
       const selection = window.getSelection();
       if (selection.rangeCount === 0) return null;
-      const documentFragment = selection.getRangeAt(0).cloneContents();
+      const documentFragment = document.createDocumentFragment();
+      for (let i = 0; i < selection.rangeCount; i += 1) {
+        documentFragment.appendChild(selection.getRangeAt(i).cloneContents());
+      }
       if (documentFragment.textContent.length === 0) return null;
 
       return documentFragment;
@@ -229,6 +246,22 @@
       });
 
       return upperCaseHeaders;
+    };
+
+    /**
+      this will take in the getAllResponseHeaders result and normalize them
+      this way we don't run into production issues when nginx gives us lowercased header keys
+    */
+    w.gl.utils.normalizeCRLFHeaders = (headers) => {
+      const headersObject = {};
+      const headersArray = headers.split('\n');
+
+      headersArray.forEach((header) => {
+        const keyValue = header.split(': ');
+        headersObject[keyValue[0]] = keyValue[1];
+      });
+
+      return w.gl.utils.normalizeHeaders(headersObject);
     };
 
     /**
@@ -343,6 +376,35 @@
         };
 
         fn(next, stop);
+      });
+    };
+
+    w.gl.utils.setFavicon = (faviconPath) => {
+      if (faviconEl && faviconPath) {
+        faviconEl.setAttribute('href', faviconPath);
+      }
+    };
+
+    w.gl.utils.resetFavicon = () => {
+      if (faviconEl) {
+        faviconEl.setAttribute('href', originalFavicon);
+      }
+    };
+
+    w.gl.utils.setCiStatusFavicon = (pageUrl) => {
+      $.ajax({
+        url: pageUrl,
+        dataType: 'json',
+        success: function(data) {
+          if (data && data.favicon) {
+            gl.utils.setFavicon(data.favicon);
+          } else {
+            gl.utils.resetFavicon();
+          }
+        },
+        error: function() {
+          gl.utils.resetFavicon();
+        }
       });
     };
   })(window);

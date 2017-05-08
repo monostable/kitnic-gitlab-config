@@ -20,51 +20,47 @@
       = confidential_icon(@issue)
       = issuable_meta(@issue, @project, "Issue")
 
-  - if can?(current_user, :create_issue, @project) || can?(current_user, :update_issue, @issue)
-    .issuable-actions
-      .clearfix.issue-btn-group.dropdown
-        %button.btn.btn-default.pull-left.hidden-md.hidden-lg{ type: "button", data: { toggle: "dropdown" } }
-          Options
-          = icon('caret-down')
-        .dropdown-menu.dropdown-menu-align-right.hidden-lg
-          %ul
-            - if can?(current_user, :create_issue, @project)
-              %li
-                = link_to 'New issue', new_namespace_project_issue_path(@project.namespace, @project), title: 'New issue', id: 'new_issue_link'
-            - if can?(current_user, :update_issue, @issue)
-              %li
-                = link_to 'Reopen issue', issue_path(@issue, issue: { state_event: :reopen }, format: 'json'), data: {no_turbolink: true}, class: "btn-reopen #{issue_button_visibility(@issue, false)}", title: 'Reopen issue'
-              %li
-                = link_to 'Close issue', issue_path(@issue, issue: { state_event: :close }, format: 'json'), data: {no_turbolink: true}, class: "btn-close #{issue_button_visibility(@issue, true)}", title: 'Close issue'
-              %li
-                = link_to 'Edit', edit_namespace_project_issue_path(@project.namespace, @project, @issue)
-            - if @issue.submittable_as_spam_by?(current_user)
-              %li
-                = link_to 'Submit as spam', mark_as_spam_namespace_project_issue_path(@project.namespace, @project, @issue), method: :post, class: 'btn-spam', title: 'Submit as spam'
-
-        - if can?(current_user, :create_issue, @project)
-          = link_to new_namespace_project_issue_path(@project.namespace, @project), class: 'hidden-xs hidden-sm btn btn-grouped new-issue-link btn-new btn-inverted', title: 'New issue', id: 'new_issue_link' do
-            New issue
-        - if can?(current_user, :update_issue, @issue)
-          = link_to 'Reopen issue', issue_path(@issue, issue: { state_event: :reopen }, format: 'json'), data: {no_turbolink: true}, class: "hidden-xs hidden-sm btn btn-grouped btn-reopen #{issue_button_visibility(@issue, false)}", title: 'Reopen issue'
-          = link_to 'Close issue', issue_path(@issue, issue: { state_event: :close }, format: 'json'), data: {no_turbolink: true}, class: "hidden-xs hidden-sm btn btn-grouped btn-close #{issue_button_visibility(@issue, true)}", title: 'Close issue'
+  .issuable-actions
+    .clearfix.issue-btn-group.dropdown
+      %button.btn.btn-default.pull-left.hidden-md.hidden-lg{ type: "button", data: { toggle: "dropdown" } }
+        Options
+        = icon('caret-down')
+      .dropdown-menu.dropdown-menu-align-right.hidden-lg
+        %ul
+          %li
+            = link_to 'New issue', new_namespace_project_issue_path(@project.namespace, @project), title: 'New issue', id: 'new_issue_link'
+          - if can?(current_user, :update_issue, @issue)
+            %li
+              = link_to 'Reopen issue', issue_path(@issue, issue: { state_event: :reopen }, format: 'json'), data: {no_turbolink: true}, class: "btn-reopen #{issue_button_visibility(@issue, false)}", title: 'Reopen issue'
+            %li
+              = link_to 'Close issue', issue_path(@issue, issue: { state_event: :close }, format: 'json'), data: {no_turbolink: true}, class: "btn-close #{issue_button_visibility(@issue, true)}", title: 'Close issue'
+            %li
+              = link_to 'Edit', edit_namespace_project_issue_path(@project.namespace, @project, @issue)
           - if @issue.submittable_as_spam_by?(current_user)
-            = link_to 'Submit as spam', mark_as_spam_namespace_project_issue_path(@project.namespace, @project, @issue), method: :post, class: 'hidden-xs hidden-sm btn btn-grouped btn-spam', title: 'Submit as spam'
-          = link_to 'Edit', edit_namespace_project_issue_path(@project.namespace, @project, @issue), class: 'hidden-xs hidden-sm btn btn-grouped issuable-edit'
+            %li
+              = link_to 'Submit as spam', mark_as_spam_namespace_project_issue_path(@project.namespace, @project, @issue), method: :post, class: 'btn-spam', title: 'Submit as spam'
 
+    = link_to new_namespace_project_issue_path(@project.namespace, @project), class: 'hidden-xs hidden-sm btn btn-grouped new-issue-link btn-new btn-inverted', title: 'New issue', id: 'new_issue_link' do
+      New issue
+    - if can?(current_user, :update_issue, @issue)
+      = link_to 'Reopen issue', issue_path(@issue, issue: { state_event: :reopen }, format: 'json'), data: {no_turbolink: true}, class: "hidden-xs hidden-sm btn btn-grouped btn-reopen #{issue_button_visibility(@issue, false)}", title: 'Reopen issue'
+      = link_to 'Close issue', issue_path(@issue, issue: { state_event: :close }, format: 'json'), data: {no_turbolink: true}, class: "hidden-xs hidden-sm btn btn-grouped btn-close #{issue_button_visibility(@issue, true)}", title: 'Close issue'
+      - if @issue.submittable_as_spam_by?(current_user)
+        = link_to 'Submit as spam', mark_as_spam_namespace_project_issue_path(@project.namespace, @project, @issue), method: :post, class: 'hidden-xs hidden-sm btn btn-grouped btn-spam', title: 'Submit as spam'
+      = link_to 'Edit', edit_namespace_project_issue_path(@project.namespace, @project, @issue), class: 'hidden-xs hidden-sm btn btn-grouped issuable-edit'
 
 .issue-details.issuable-details
-  .detail-page-description.content-block{ class: ('hide-bottom-border' unless @issue.description.present? ) }
-    %h2.title
-      = markdown_field(@issue, :title)
-    - if @issue.description.present?
-      .description{ class: can?(current_user, :update_issue, @issue) ? 'js-task-list-container' : '' }
-        .wiki
-          = preserve do
-            = markdown_field(@issue, :description)
-        %textarea.hidden.js-task-list-field
-          = @issue.description
-    = edited_time_ago_with_tooltip(@issue, placement: 'bottom', html_class: 'issue_edited_ago')
+  .detail-page-description.content-block
+    .issue-title-data.hidden{ "data" => { "endpoint" => rendered_title_namespace_project_issue_path(@project.namespace, @project, @issue),
+      "can-update-tasks-class" => can?(current_user, :update_issue, @issue) ? 'js-task-list-container' : '',
+      "is-edited": @issue.is_edited?,
+    } }
+    .issue-title-entrypoint
+      %h2.title.js-issue-title= markdown_field(@issue, :title)
+      - if @issue.description.present?
+        .description{ class: can?(current_user, :update_issue, @issue) ? 'js-task-list-container' : '' }
+          .wiki.js-issue-description= markdown_field(@issue, :description)
+          %textarea.hidden.js-task-list-field= @issue.description
 
     #merge-requests{ data: { url: referenced_merge_requests_namespace_project_issue_url(@project.namespace, @project, @issue) } }
       // This element is filled in using JavaScript.
@@ -72,11 +68,17 @@
     #related-branches{ data: { url: related_branches_namespace_project_issue_url(@project.namespace, @project, @issue) } }
       // This element is filled in using JavaScript.
 
-  .content-block.content-block-small
-    = render 'new_branch' unless @issue.confidential?
-    = render 'award_emoji/awards_block', awardable: @issue, inline: true
+  .content-block.emoji-block
+    .row
+      .col-sm-8
+        = render 'award_emoji/awards_block', awardable: @issue, inline: true
+      .col-sm-4.new-branch-col
+        = render 'new_branch' unless @issue.confidential?
 
   %section.issuable-discussion
     = render 'projects/issues/discussion'
 
 = render 'shared/issuable/sidebar', issuable: @issue
+
+= page_specific_javascript_bundle_tag('common_vue')
+= page_specific_javascript_bundle_tag('issue_show')

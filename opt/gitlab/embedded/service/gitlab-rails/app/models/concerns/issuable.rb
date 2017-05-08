@@ -14,6 +14,8 @@ module Issuable
   include Awardable
   include Taskable
   include TimeTrackable
+  include Importable
+  include Editable
 
   # This object is used to gather issuable meta data for displaying
   # upvotes, downvotes, notes and closing merge requests count for issues and merge requests
@@ -22,11 +24,11 @@ module Issuable
 
   included do
     cache_markdown_field :title, pipeline: :single_line
-    cache_markdown_field :description
+    cache_markdown_field :description, issuable_state_filter_enabled: true
 
     belongs_to :author, class_name: "User"
-    belongs_to :assignee, class_name: "User"
     belongs_to :updated_by, class_name: "User"
+    belongs_to :last_edited_by, class_name: 'User'
     belongs_to :milestone
     has_many :notes, as: :noteable, inverse_of: :noteable, dependent: :destroy do
       def authors_loaded?
@@ -50,6 +52,7 @@ module Issuable
              :email,
              :public_email,
              to: :author,
+             allow_nil: true,
              prefix: true
 
     delegate :name,
@@ -63,10 +66,8 @@ module Issuable
     validates :title, presence: true, length: { maximum: 255 }
 
     scope :authored, ->(user) { where(author_id: user) }
-    scope :assigned_to, ->(u) { where(assignee_id: u.id)}
     scope :recent, -> { reorder(id: :desc) }
-    scope :assigned, -> { where("assignee_id IS NOT NULL") }
-    scope :unassigned, -> { where("assignee_id IS NULL") }
+    scope :order_position_asc, -> { reorder(position: :asc) }
     scope :of_projects, ->(ids) { where(project_id: ids) }
     scope :of_milestones, ->(ids) { where(milestone_id: ids) }
     scope :with_milestone, ->(title) { left_joins_milestones.where(milestones: { title: title }) }
@@ -89,22 +90,13 @@ module Issuable
     attr_mentionable :description
 
     participant :author
-    participant :assignee
     participant :notes_with_associations
 
     strip_attributes :title
 
     acts_as_paranoid
 
-    after_save :update_assignee_cache_counts, if: :assignee_id_changed?
-    after_save :record_metrics
-
-    def update_assignee_cache_counts
-      # make sure we flush the cache for both the old *and* new assignees(if they exist)
-      previous_assignee = User.find_by_id(assignee_id_was) if assignee_id_was
-      previous_assignee&.update_cache_counts
-      assignee&.update_cache_counts
-    end
+    after_save :record_metrics, unless: :imported?
 
     # We want to use optimistic lock for cases when only title or description are involved
     # http://api.rubyonrails.org/classes/ActiveRecord/Locking/Optimistic.html
@@ -234,10 +226,6 @@ module Issuable
     today? && created_at == updated_at
   end
 
-  def is_being_reassigned?
-    assignee_id_changed?
-  end
-
   def open?
     opened? || reopened?
   end
@@ -262,10 +250,15 @@ module Issuable
       user: user.hook_attrs,
       project: project.hook_attrs,
       object_attributes: hook_attrs,
+      labels: labels.map(&:hook_attrs),
       # DEPRECATED
       repository: project.hook_attrs.slice(:name, :url, :description, :homepage)
     }
-    hook_data[:assignee] = assignee.hook_attrs if assignee
+    if self.is_a?(Issue)
+      hook_data[:assignees] = assignees.map(&:hook_attrs) if assignees.any?
+    else
+      hook_data[:assignee] = assignee.hook_attrs if assignee
+    end
 
     hook_data
   end
@@ -286,17 +279,6 @@ module Issuable
   #   issuable.to_ability_name # => "merge_request"
   def to_ability_name
     self.class.to_ability_name
-  end
-
-  # Convert this Issuable class name to a format usable by notifications.
-  #
-  # Examples:
-  #
-  #   issuable.class           # => MergeRequest
-  #   issuable.human_class_name # => "merge request"
-
-  def human_class_name
-    @human_class_name ||= self.class.name.titleize.downcase
   end
 
   # Returns a Hash of attributes to be used for Twitter card metadata
@@ -336,11 +318,6 @@ module Issuable
   #
   def can_move?(*)
     false
-  end
-
-  def assignee_or_author?(user)
-    # We're comparing IDs here so we don't need to load any associations.
-    author_id == user.id || assignee_id == user.id
   end
 
   def record_metrics

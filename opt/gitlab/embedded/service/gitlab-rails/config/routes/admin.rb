@@ -50,8 +50,10 @@ namespace :admin do
 
   resources :deploy_keys, only: [:index, :new, :create, :destroy]
 
-  resources :hooks, only: [:index, :create, :destroy] do
-    get :test
+  resources :hooks, only: [:index, :create, :edit, :update, :destroy] do
+    member do
+      get :test
+    end
   end
 
   resources :broadcast_messages, only: [:index, :edit, :create, :update, :destroy] do
@@ -66,7 +68,9 @@ namespace :admin do
 
   resources :projects, only: [:index]
 
-  scope(path: 'projects/*namespace_id', as: :namespace) do
+  scope(path: 'projects/*namespace_id',
+        as: :namespace,
+        constraints: { namespace_id: Gitlab::Regex.namespace_route_regex }) do
     resources(:projects,
               path: '/',
               constraints: { id: Gitlab::Regex.project_route_regex },
@@ -91,6 +95,7 @@ namespace :admin do
 
   resource :application_settings, only: [:show, :update] do
     resources :services, only: [:index, :edit, :update]
+    get :usage_data
     put :reset_runners_token
     put :reset_health_check_token
     put :clear_repository_check_states
@@ -104,6 +109,8 @@ namespace :admin do
       get :pause
     end
   end
+
+  resources :cohorts, only: :index
 
   resources :builds, only: :index do
     collection do

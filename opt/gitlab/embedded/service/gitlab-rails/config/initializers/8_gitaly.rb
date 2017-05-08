@@ -1,2 +1,8 @@
-# Make sure we initialize a Gitaly channel before Sidekiq starts multi-threaded execution.
-Gitlab::GitalyClient.channel unless Rails.env.test?
+require 'uri'
+
+if Gitlab.config.gitaly.enabled || Rails.env.test?
+  Gitlab.config.repositories.storages.keys.each do |storage|
+    # Force validation of each address
+    Gitlab::GitalyClient.address(storage)
+  end
+end

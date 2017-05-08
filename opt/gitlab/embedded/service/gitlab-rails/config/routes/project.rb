@@ -5,7 +5,22 @@ resources :projects, only: [:index, :new, :create]
 draw :git_http
 
 constraints(ProjectUrlConstrainer.new) do
-  scope(path: '*namespace_id', as: :namespace) do
+  # If the route has a wildcard segment, the segment has a regex constraint,
+  # the segment is potentially followed by _another_ wildcard segment, and
+  # the `format` option is not set to false, we need to specify that
+  # regex constraint _outside_ of `constraints: {}`.
+  #
+  # Otherwise, Rails will overwrite the constraint with `/.+?/`,
+  # which breaks some of our wildcard routes like `/blob/*id`
+  # and `/tree/*id` that depend on the negative lookahead inside
+  # `Gitlab::Regex.namespace_route_regex`, which helps the router
+  # determine whether a certain path segment is part of `*namespace_id`,
+  # `:project_id`, or `*id`.
+  #
+  # See https://github.com/rails/rails/blob/v4.2.8/actionpack/lib/action_dispatch/routing/mapper.rb#L155
+  scope(path: '*namespace_id',
+        as: :namespace,
+        namespace_id: Gitlab::Regex.namespace_route_regex) do
     scope(path: ':project_id',
           constraints: { project_id: Gitlab::Regex.project_route_regex },
           module: :projects,
@@ -42,32 +57,9 @@ constraints(ProjectUrlConstrainer.new) do
         resources :domains, only: [:show, :new, :create, :destroy], controller: 'pages_domains', constraints: { id: /[^\/]+/ }
       end
 
-      resources :compare, only: [:index, :create] do
-        collection do
-          get :diff_for_path
-        end
-      end
-
-      get '/compare/:from...:to', to: 'compare#show', as: 'compare', constraints: { from: /.+/, to: /.+/ }
-
-      # Don't use format parameter as file extension (old 3.0.x behavior)
-      # See http://guides.rubyonrails.org/routing.html#route-globbing-and-wildcard-segments
-      scope format: false do
-        resources :network, only: [:show], constraints: { id: Gitlab::Regex.git_reference_regex }
-
-        resources :graphs, only: [:show], constraints: { id: Gitlab::Regex.git_reference_regex } do
-          member do
-            get :charts
-            get :commits
-            get :ci
-            get :languages
-          end
-        end
-      end
-
       resources :snippets, concerns: :awardable, constraints: { id: /\d+/ } do
         member do
-          get 'raw'
+          get :raw
           post :mark_as_spam
         end
       end
@@ -97,11 +89,10 @@ constraints(ProjectUrlConstrainer.new) do
           get :conflicts
           get :conflict_for_path
           get :pipelines
-          get :merge_check
+          get :commit_change_content
           post :merge
-          get :merge_widget_refresh
           post :cancel_merge_when_pipeline_succeeds
-          get :ci_status
+          get :pipeline_status
           get :ci_environments_status
           post :toggle_subscription
           post :remove_wip
@@ -127,13 +118,6 @@ constraints(ProjectUrlConstrainer.new) do
         end
       end
 
-      resources :branches, only: [:index, :new, :create, :destroy], constraints: { id: Gitlab::Regex.git_reference_regex }
-      delete :merged_branches, controller: 'branches', action: :destroy_all_merged
-      resources :tags, only: [:index, :show, :new, :create, :destroy], constraints: { id: Gitlab::Regex.git_reference_regex } do
-        resource :release, only: [:edit, :update]
-      end
-
-      resources :protected_branches, only: [:index, :show, :create, :update, :destroy], constraints: { id: Gitlab::Regex.git_reference_regex }
       resources :variables, only: [:index, :show, :update, :create, :destroy]
       resources :triggers, only: [:index, :create, :edit, :update, :destroy] do
         member do
@@ -152,6 +136,14 @@ constraints(ProjectUrlConstrainer.new) do
           post :cancel
           post :retry
           get :builds
+          get :failures
+          get :status
+        end
+      end
+
+      resources :pipeline_schedules, except: [:show] do
+        member do
+          post :take_ownership
         end
       end
 
@@ -165,6 +157,12 @@ constraints(ProjectUrlConstrainer.new) do
 
         collection do
           get :folder, path: 'folders/*id', constraints: { format: /(html|json)/ }
+        end
+
+        resources :deployments, only: [:index] do
+          member do
+            get :metrics
+          end
         end
       end
 
@@ -201,7 +199,7 @@ constraints(ProjectUrlConstrainer.new) do
           post :retry
           post :play
           post :erase
-          get :trace
+          get :trace, defaults: { format: 'json' }
           get :raw
         end
 
@@ -209,22 +207,34 @@ constraints(ProjectUrlConstrainer.new) do
           get :download
           get :browse, path: 'browse(/*path)', format: false
           get :file, path: 'file/*path', format: false
+          get :raw, path: 'raw/*path', format: false
           post :keep
         end
       end
 
-      resources :hooks, only: [:index, :create, :destroy], constraints: { id: /\d+/ } do
+      resources :hooks, only: [:index, :create, :edit, :update, :destroy], constraints: { id: /\d+/ } do
         member do
           get :test
         end
       end
 
-      resources :container_registry, only: [:index, :destroy], constraints: { id: Gitlab::Regex.container_registry_reference_regex }
+      resources :container_registry, only: [:index, :destroy],
+                                     controller: 'registry/repositories'
+
+      namespace :registry do
+        resources :repository, only: [] do
+          resources :tags, only: [:destroy],
+                           constraints: { id: Gitlab::Regex.container_registry_reference_regex }
+        end
+      end
 
       resources :milestones, constraints: { id: /\d+/ } do
         member do
           put :sort_issues
           put :sort_merge_requests
+          get :merge_requests
+          get :participants
+          get :labels
         end
       end
 
@@ -248,6 +258,8 @@ constraints(ProjectUrlConstrainer.new) do
           get :referenced_merge_requests
           get :related_branches
           get :can_create_branch
+          get :rendered_title
+          post :create_merge_request
         end
         collection do
           post  :bulk_update

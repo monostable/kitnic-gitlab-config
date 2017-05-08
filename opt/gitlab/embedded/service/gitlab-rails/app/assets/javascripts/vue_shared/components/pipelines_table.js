@@ -1,25 +1,31 @@
-/* eslint-disable no-param-reassign */
-/* global Vue */
+import PipelinesTableRowComponent from './pipelines_table_row';
 
-require('./pipelines_table_row');
 /**
  * Pipelines Table Component.
  *
  * Given an array of objects, renders a table.
  */
-
-module.exports = {
+export default {
   props: {
     pipelines: {
       type: Array,
       required: true,
-      default: () => ([]),
     },
 
+    service: {
+      type: Object,
+      required: true,
+    },
+
+    updateGraphDropdown: {
+      type: Boolean,
+      required: false,
+      default: false,
+    },
   },
 
   components: {
-    'pipelines-table-row-component': gl.pipelines.PipelinesTableRowComponent,
+    'pipelines-table-row-component': PipelinesTableRowComponent,
   },
 
   template: `
@@ -38,7 +44,10 @@ module.exports = {
         <template v-for="model in pipelines"
           v-bind:model="model">
           <tr is="pipelines-table-row-component"
-            :pipeline="model"></tr>
+            :pipeline="model"
+            :service="service"
+            :update-graph-dropdown="updateGraphDropdown"
+            />
         </template>
       </tbody>
     </table>

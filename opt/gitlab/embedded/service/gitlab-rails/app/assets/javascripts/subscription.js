@@ -1,5 +1,3 @@
-/* global Vue */
-
 (() => {
   class Subscription {
     constructor(containerElm) {
@@ -29,8 +27,7 @@
 
         // hack to allow this to work with the issue boards Vue object
         if (document.querySelector('html').classList.contains('issue-boards-page')) {
-          Vue.set(
-            gl.issueBoards.BoardsStore.detail.issue,
+          gl.issueBoards.boardStoreIssueSet(
             'subscribed',
             !gl.issueBoards.BoardsStore.detail.issue.subscribed,
           );

@@ -2,6 +2,7 @@ class Commit
   extend ActiveModel::Naming
 
   include ActiveModel::Conversion
+  include Noteable
   include Participable
   include Mentionable
   include Referable
@@ -203,6 +204,10 @@ class Commit
     project.notes.for_commit_id(self.id)
   end
 
+  def discussion_notes
+    notes.non_diff_notes
+  end
+
   def notes_with_associations
     notes.includes(:author)
   end
@@ -229,6 +234,10 @@ class Commit
 
   def pipelines
     project.pipelines.where(sha: sha)
+  end
+
+  def last_pipeline
+    @last_pipeline ||= pipelines.last
   end
 
   def status(ref = nil)
@@ -307,7 +316,7 @@ class Commit
   def uri_type(path)
     entry = @raw.tree.path(path)
     if entry[:type] == :blob
-      blob = ::Blob.decorate(Gitlab::Git::Blob.new(name: entry[:name]))
+      blob = ::Blob.decorate(Gitlab::Git::Blob.new(name: entry[:name]), @project)
       blob.image? || blob.video? ? :raw : :blob
     else
       entry[:type]
@@ -317,7 +326,14 @@ class Commit
   end
 
   def raw_diffs(*args)
-    raw.diffs(*args)
+    use_gitaly = Gitlab::GitalyClient.feature_enabled?(:commit_raw_diffs)
+    deltas_only = args.last.is_a?(Hash) && args.last[:deltas_only]
+
+    if use_gitaly && !deltas_only
+      Gitlab::GitalyClient::Commit.diff_from_parent(self, *args)
+    else
+      raw.diffs(*args)
+    end
   end
 
   def diffs(diff_options = nil)

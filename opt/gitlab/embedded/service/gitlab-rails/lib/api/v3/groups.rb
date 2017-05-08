@@ -45,7 +45,7 @@ module API
           groups = if current_user.admin
                      Group.all
                    elsif params[:all_available]
-                     GroupsFinder.new.execute(current_user)
+                     GroupsFinder.new(current_user).execute
                    else
                      current_user.groups
                    end
@@ -54,7 +54,7 @@ module API
           groups = groups.where.not(id: params[:skip_groups]) if params[:skip_groups].present?
           groups = groups.reorder(params[:order_by] => params[:sort])
 
-          present_groups groups, statistics: params[:statistics] && current_user.is_admin?
+          present_groups groups, statistics: params[:statistics] && current_user.admin?
         end
 
         desc 'Get list of owned groups for authenticated user' do
@@ -93,7 +93,7 @@ module API
       params do
         requires :id, type: String, desc: 'The ID of a group'
       end
-      resource :groups do
+      resource :groups, requirements: { id: %r{[^/]+} } do
         desc 'Update a group. Available only for users who can administrate groups.' do
           success Entities::Group
         end
@@ -151,7 +151,7 @@ module API
         end
         get ":id/projects" do
           group = find_group!(params[:id])
-          projects = GroupProjectsFinder.new(group).execute(current_user)
+          projects = GroupProjectsFinder.new(group: group, current_user: current_user).execute
           projects = filter_projects(projects)
           entity = params[:simple] ? ::API::Entities::BasicProjectDetails : Entities::Project
           present paginate(projects), with: entity, current_user: current_user
@@ -163,7 +163,7 @@ module API
         params do
           requires :project_id, type: String, desc: 'The ID or path of the project'
         end
-        post ":id/projects/:project_id" do
+        post ":id/projects/:project_id", requirements: { project_id: /.+/ } do
           authenticated_as_admin!
           group = find_group!(params[:id])
           project = find_project!(params[:project_id])

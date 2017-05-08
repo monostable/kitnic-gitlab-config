@@ -1,14 +1,17 @@
 /* eslint-disable one-var, quote-props, comma-dangle, space-before-function-paren */
-/* global Vue */
 /* global BoardService */
+/* global Flash */
 
-window.Vue = require('vue');
-window.Vue.use(require('vue-resource'));
+import Vue from 'vue';
+import VueResource from 'vue-resource';
+import FilteredSearchBoards from './filtered_search_boards';
+import eventHub from './eventhub';
+
 require('./models/issue');
 require('./models/label');
 require('./models/list');
 require('./models/milestone');
-require('./models/user');
+require('./models/assignee');
 require('./stores/boards_store');
 require('./stores/modal_store');
 require('./services/board_service');
@@ -20,6 +23,8 @@ require('./components/board_sidebar');
 require('./components/new_list_dropdown');
 require('./components/modal/index');
 require('../vue_shared/vue_resource_interceptor');
+
+Vue.use(VueResource);
 
 $(() => {
   const $boardApp = document.getElementById('board-app');
@@ -33,6 +38,10 @@ $(() => {
   }
 
   Store.create();
+
+  // hack to allow sidebar scripts like milestone_select manipulate the BoardsStore
+  gl.issueBoards.boardStoreIssueSet = (...args) => Vue.set(Store.detail.issue, ...args);
+  gl.issueBoards.boardStoreIssueDelete = (...args) => Vue.delete(Store.detail.issue, ...args);
 
   gl.IssueBoardsApp = new Vue({
     el: $boardApp,
@@ -50,7 +59,8 @@ $(() => {
       issueLinkBase: $boardApp.dataset.issueLinkBase,
       rootPath: $boardApp.dataset.rootPath,
       bulkUpdatePath: $boardApp.dataset.bulkUpdatePath,
-      detailIssue: Store.detail
+      detailIssue: Store.detail,
+      defaultAvatar: $boardApp.dataset.defaultAvatar,
     },
     computed: {
       detailIssueVisible () {
@@ -59,16 +69,25 @@ $(() => {
     },
     created () {
       gl.boardService = new BoardService(this.endpoint, this.bulkUpdatePath, this.boardId);
+
+      this.filterManager = new FilteredSearchBoards(Store.filter, true);
+
+      // Listen for updateTokens event
+      eventHub.$on('updateTokens', this.updateTokens);
+    },
+    beforeDestroy() {
+      eventHub.$off('updateTokens', this.updateTokens);
     },
     mounted () {
       Store.disabled = this.disabled;
       gl.boardService.all()
         .then((resp) => {
           resp.json().forEach((board) => {
-            const list = Store.addList(board);
+            const list = Store.addList(board, this.defaultAvatar);
 
-            if (list.type === 'done') {
+            if (list.type === 'closed') {
               list.position = Infinity;
+              list.label = { description: 'Shows all closed issues. Moving an issue to this list closes it' };
             }
           });
 
@@ -76,12 +95,17 @@ $(() => {
 
           Store.addBlankState();
           this.loading = false;
-        });
-    }
+        }).catch(() => new Flash('An error occurred. Please try again.'));
+    },
+    methods: {
+      updateTokens() {
+        this.filterManager.updateTokens();
+      }
+    },
   });
 
   gl.IssueBoardsSearch = new Vue({
-    el: document.getElementById('js-boards-search'),
+    el: document.getElementById('js-add-list'),
     data: {
       filters: Store.state.filters
     },

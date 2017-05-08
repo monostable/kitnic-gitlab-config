@@ -33,7 +33,7 @@
   padding-right: 0;
 
   @media (min-width: $screen-sm-min) {
-    .content-wrapper {
+    &:not(.wiki-sidebar):not(.build-sidebar) .content-wrapper {
       padding-right: $gutter_collapsed_width;
     }
 
@@ -53,9 +53,10 @@
 
 .right-sidebar-expanded {
   padding-right: 0;
+  z-index: 300;
 
   @media (min-width: $screen-sm-min) and (max-width: $screen-sm-max) {
-    .content-wrapper {
+    &:not(.wiki-sidebar):not(.build-sidebar) .content-wrapper {
       padding-right: $gutter_collapsed_width;
     }
   }
@@ -81,5 +82,9 @@
   &.affix {
     position: fixed;
     top: 0;
+  }
+
+  &:not(.affix-top) {
+    min-height: 100%;
   }
 }

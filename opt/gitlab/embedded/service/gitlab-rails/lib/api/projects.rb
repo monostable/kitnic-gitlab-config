@@ -6,12 +6,12 @@ module API
     before { authenticate_non_get! }
 
     helpers do
-      params :optional_params do
+      params :optional_params_ce do
         optional :description, type: String, desc: 'The description of the project'
         optional :issues_enabled, type: Boolean, desc: 'Flag indication if the issue tracker is enabled'
         optional :merge_requests_enabled, type: Boolean, desc: 'Flag indication if merge requests are enabled'
         optional :wiki_enabled, type: Boolean, desc: 'Flag indication if the wiki is enabled'
-        optional :builds_enabled, type: Boolean, desc: 'Flag indication if builds are enabled'
+        optional :jobs_enabled, type: Boolean, desc: 'Flag indication if jobs are enabled'
         optional :snippets_enabled, type: Boolean, desc: 'Flag indication if snippets are enabled'
         optional :shared_runners_enabled, type: Boolean, desc: 'Flag indication if shared runners are enabled for that project'
         optional :container_registry_enabled, type: Boolean, desc: 'Flag indication if the container registry is enabled for that project'
@@ -21,6 +21,14 @@ module API
         optional :request_access_enabled, type: Boolean, desc: 'Allow users to request member access'
         optional :only_allow_merge_if_pipeline_succeeds, type: Boolean, desc: 'Only allow to merge if builds succeed'
         optional :only_allow_merge_if_all_discussions_are_resolved, type: Boolean, desc: 'Only allow to merge if all discussions are resolved'
+      end
+
+      params :optional_params do
+        use :optional_params_ce
+      end
+
+      params :statistics_params do
+        optional :statistics, type: Boolean, default: false, desc: 'Include project statistics'
       end
     end
 
@@ -52,10 +60,6 @@ module API
           optional :membership, type: Boolean, default: false, desc: 'Limit by projects that the current user is a member of'
         end
 
-        params :statistics_params do
-          optional :statistics, type: Boolean, default: false, desc: 'Include project statistics'
-        end
-
         params :create_params do
           optional :namespace_id, type: Integer, desc: 'Namespace ID for the new project. Default to the user namespace.'
           optional :import_url, type: String, desc: 'URL from which the project is imported'
@@ -81,10 +85,11 @@ module API
       end
       params do
         use :collection_params
+        use :statistics_params
       end
       get do
         entity = current_user ? Entities::ProjectWithAccess : Entities::BasicProjectDetails
-        present_projects ProjectsFinder.new.execute(current_user), with: entity, statistics: params[:statistics]
+        present_projects ProjectsFinder.new(current_user: current_user).execute, with: entity, statistics: params[:statistics]
       end
 
       desc 'Create new project' do
@@ -99,6 +104,7 @@ module API
       end
       post do
         attrs = declared_params(include_missing: false)
+        attrs[:builds_enabled] = attrs.delete(:jobs_enabled) if attrs.has_key?(:jobs_enabled)
         project = ::Projects::CreateService.new(current_user, attrs).execute
 
         if project.saved?
@@ -142,14 +148,17 @@ module API
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
-    resource :projects, requirements: { id: /[^\/]+/ } do
+    resource :projects, requirements: { id: %r{[^/]+} } do
       desc 'Get a single project' do
         success Entities::ProjectWithAccess
+      end
+      params do
+        use :statistics_params
       end
       get ":id" do
         entity = current_user ? Entities::ProjectWithAccess : Entities::BasicProjectDetails
         present user_project, with: entity, current_user: current_user,
-                              user_can_admin_project: can?(current_user, :admin_project, user_project)
+                              user_can_admin_project: can?(current_user, :admin_project, user_project), statistics: params[:statistics]
       end
 
       desc 'Get events for a single project' do
@@ -198,23 +207,41 @@ module API
         success Entities::Project
       end
       params do
+        # CE
+        at_least_one_of_ce =
+          [
+            :jobs_enabled,
+            :container_registry_enabled,
+            :default_branch,
+            :description,
+            :issues_enabled,
+            :lfs_enabled,
+            :merge_requests_enabled,
+            :name,
+            :only_allow_merge_if_all_discussions_are_resolved,
+            :only_allow_merge_if_pipeline_succeeds,
+            :path,
+            :public_builds,
+            :request_access_enabled,
+            :shared_runners_enabled,
+            :snippets_enabled,
+            :visibility,
+            :wiki_enabled,
+          ]
         optional :name, type: String, desc: 'The name of the project'
         optional :default_branch, type: String, desc: 'The default branch of the project'
         optional :path, type: String, desc: 'The path of the repository'
+
         use :optional_params
-        at_least_one_of :name, :description, :issues_enabled, :merge_requests_enabled,
-                        :wiki_enabled, :builds_enabled, :snippets_enabled,
-                        :shared_runners_enabled, :container_registry_enabled,
-                        :lfs_enabled, :visibility, :public_builds,
-                        :request_access_enabled, :only_allow_merge_if_pipeline_succeeds,
-                        :only_allow_merge_if_all_discussions_are_resolved, :path,
-                        :default_branch
+        at_least_one_of(*at_least_one_of_ce)
       end
       put ':id' do
         authorize_admin_project
         attrs = declared_params(include_missing: false)
         authorize! :rename_project, user_project if attrs[:name].present?
         authorize! :change_visibility_level, user_project if attrs[:visibility].present?
+
+        attrs[:builds_enabled] = attrs.delete(:jobs_enabled) if attrs.has_key?(:jobs_enabled)
 
         result = ::Projects::UpdateService.new(user_project, current_user, attrs).execute
 
@@ -358,7 +385,7 @@ module API
         requires :file, type: File, desc: 'The file to be uploaded'
       end
       post ":id/uploads" do
-        ::Projects::UploadService.new(user_project, params[:file]).execute
+        UploadService.new(user_project, params[:file]).execute
       end
 
       desc 'Get the users list of a project' do

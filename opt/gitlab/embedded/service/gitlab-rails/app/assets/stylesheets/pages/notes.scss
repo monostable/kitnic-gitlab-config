@@ -16,6 +16,15 @@ ul.notes {
 
   .timeline-icon {
     float: left;
+
+    svg {
+      width: 16px;
+      height: 16px;
+      fill: $gray-darkest;
+      position: absolute;
+      left: 0;
+      top: 16px;
+    }
   }
 
   .timeline-content {
@@ -33,10 +42,139 @@ ul.notes {
     white-space: nowrap;
   }
 
+  .discussion-body {
+    padding-top: 8px;
+
+    .panel {
+      margin-bottom: 0;
+    }
+  }
+
+  .discussion {
+    overflow: hidden;
+    display: block;
+    position: relative;
+  }
+
+  .note {
+    padding: $gl-padding $gl-btn-padding 0;
+    display: block;
+    position: relative;
+    border-bottom: 1px solid $white-normal;
+
+    &.being-posted {
+      pointer-events: none;
+      opacity: 0.5;
+
+      .dummy-avatar {
+        display: inline-block;
+        height: 40px;
+        width: 40px;
+        border-radius: 50%;
+        background-color: $kdb-border;
+        border: 1px solid darken($kdb-border, 25%);
+      }
+
+      .note-headline-light,
+      .fa-spinner {
+        margin-left: 3px;
+      }
+    }
+
+    &.note-discussion {
+      &.timeline-entry {
+        padding: $gl-padding 10px;
+      }
+
+      .system-note {
+        padding: 0;
+      }
+    }
+
+    &.is-editing {
+      .note-header,
+      .note-text,
+      .edited-text {
+        display: none;
+      }
+
+      .note-edit-form {
+        display: block;
+
+        &.current-note-edit-form + .note-awards {
+          display: none;
+        }
+      }
+    }
+
+    .note-body {
+      overflow-x: auto;
+      overflow-y: hidden;
+
+      .note-text {
+        word-wrap: break-word;
+        @include md-typography;
+        // Reset ul style types since we're nested inside a ul already
+        @include bulleted-list;
+        ul.task-list {
+          ul:not(.task-list) {
+            padding-left: 1.3em;
+          }
+        }
+
+        table {
+          @include markdown-table;
+        }
+      }
+    }
+
+    .note-awards {
+      .js-awards-block {
+        margin-bottom: 16px;
+      }
+    }
+
+    .note-header {
+
+      @media (max-width: $screen-xs-min) {
+        .inline {
+          display: block;
+        }
+      }
+    }
+
+    .note-emoji-button {
+      position: relative;
+      line-height: 1;
+
+      .fa-spinner {
+        display: none;
+      }
+
+      &.is-loading {
+        .fa-smile-o {
+          display: none;
+        }
+
+        .fa-spinner {
+          display: inline-block;
+        }
+      }
+    }
+  }
+
   .system-note {
     font-size: 14px;
     padding: 0;
     clear: both;
+
+    @media (min-width: $screen-sm-min) {
+      margin-left: 65px;
+    }
+
+    .note-header-info {
+      padding-bottom: 0;
+    }
 
     &.timeline-entry::after {
       clear: none;
@@ -66,6 +204,14 @@ ul.notes {
 
     .timeline-content {
       padding: 14px 10px;
+
+      @media (min-width: $screen-sm-min) {
+        margin-left: 20px;
+      }
+    }
+
+    .note-header {
+      padding-bottom: 0;
     }
 
     .note-body {
@@ -130,132 +276,6 @@ ul.notes {
         }
       }
     }
-
-    .timeline-icon {
-      display: none;
-
-      .avatar {
-        visibility: hidden;
-
-        .discussion-body & {
-          visibility: visible;
-        }
-      }
-    }
-  }
-
-  .discussion-body {
-    padding-top: 15px;
-  }
-
-  .discussion {
-    overflow: hidden;
-    display: block;
-    position: relative;
-  }
-
-  .note {
-    display: block;
-    position: relative;
-    border-bottom: 1px solid $white-normal;
-
-    &.note-discussion {
-      &.timeline-entry {
-        padding: 14px 10px;
-      }
-
-      .system-note {
-        padding: 0;
-      }
-    }
-
-    &.is-editting {
-      .note-header,
-      .note-text,
-      .edited-text {
-        display: none;
-      }
-
-      .note-edit-form {
-        display: block;
-
-        &.current-note-edit-form + .note-awards {
-          display: none;
-        }
-      }
-    }
-
-    .note-body {
-      overflow-x: auto;
-      overflow-y: hidden;
-
-      .note-text {
-        word-wrap: break-word;
-        @include md-typography;
-        // Reset ul style types since we're nested inside a ul already
-        @include bulleted-list;
-        ul.task-list {
-          ul:not(.task-list) {
-            padding-left: 1.3em;
-          }
-        }
-      }
-    }
-
-    .note-awards {
-      .js-awards-block {
-        padding: 2px;
-        margin-top: 10px;
-      }
-    }
-
-    .note-header {
-      padding-bottom: 3px;
-      padding-right: 20px;
-
-      @media (min-width: $screen-sm-min) {
-        padding-right: 0;
-      }
-
-      @media (max-width: $screen-xs-min) {
-        .inline {
-          display: block;
-        }
-      }
-    }
-
-    .note-emoji-button {
-      .fa-spinner {
-        display: none;
-      }
-
-      &.is-loading {
-        .fa-smile-o {
-          display: none;
-        }
-
-        .fa-spinner {
-          display: inline-block;
-        }
-      }
-    }
-
-  }
-}
-
-.page-sidebar-pinned.right-sidebar-expanded {
-  @media (max-width: $screen-md-max) {
-    .note-header {
-      .note-headline-light {
-        display: block;
-      }
-
-      .note-actions {
-        position: absolute;
-        right: 0;
-        top: 0;
-      }
-    }
   }
 }
 
@@ -310,6 +330,18 @@ ul.notes {
         border-width: 1px;
       }
 
+      .discussion-notes {
+        &:not(:first-child) {
+          border-top: 1px solid $white-normal;
+          margin-top: 20px;
+        }
+
+        &:not(:last-child) {
+          border-bottom: 1px solid $white-normal;
+          margin-bottom: 20px;
+        }
+      }
+
       .notes {
         background-color: $white-light;
       }
@@ -348,6 +380,20 @@ ul.notes {
   font-size: 14px;
 }
 
+.note-header {
+  display: flex;
+  justify-content: space-between;
+
+  @media (max-width: $screen-xs-max) {
+    flex-flow: row wrap;
+  }
+}
+
+.note-header-info {
+  min-width: 0;
+  padding-bottom: 8px;
+}
+
 .note-headline-light {
   display: inline;
 
@@ -367,24 +413,39 @@ ul.notes {
   }
 }
 
+.note-headline-meta {
+  display: inline-block;
+  white-space: nowrap;
+
+  .system-note-message {
+    white-space: normal;
+  }
+}
+
 /**
  * Actions for Discussions/Notes
  */
 
-.discussion-actions,
-.note-actions {
+.discussion-actions {
   float: right;
   margin-left: 10px;
   color: $gray-darkest;
 }
 
 .note-actions {
-  position: absolute;
-  right: 0;
-  top: 0;
+  flex-shrink: 0;
+  // For PhantomJS that does not support flex
+  float: right;
+  margin-left: 10px;
+  color: $gray-darkest;
+
+  @media (max-width: $screen-xs-max) {
+    float: none;
+    margin-left: 0;
+  }
 
   .note-action-button {
-    margin-left: 10px;
+    margin-left: 8px;
   }
 }
 
@@ -400,8 +461,7 @@ ul.notes {
 }
 
 .note-action-button {
-  display: inline-block;
-  margin-left: 0;
+  display: inline;
   line-height: 20px;
 
   @media (min-width: $screen-sm-min) {
@@ -415,20 +475,72 @@ ul.notes {
     font-size: 17px;
   }
 
-  &:hover {
+  svg {
+    height: 16px;
+    width: 16px;
+    fill: $gray-darkest;
+    vertical-align: text-top;
+  }
+
+  .award-control-icon-positive,
+  .award-control-icon-super-positive {
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+  }
+
+  &:hover,
+  &.is-active {
     .danger-highlight {
       color: $gl-text-red;
     }
 
     .link-highlight {
       color: $gl-link-color;
+
+      svg {
+        fill: $gl-link-color;
+      }
+    }
+
+    .award-control-icon-neutral {
+      opacity: 0;
+    }
+
+    .award-control-icon-positive {
+      opacity: 1;
+    }
+  }
+
+  &.is-active {
+    .award-control-icon-positive {
+      opacity: 0;
+    }
+
+    .award-control-icon-super-positive {
+      opacity: 1;
     }
   }
 }
 
 .discussion-toggle-button {
+  padding: 0;
+  background-color: transparent;
+  border: 0;
   line-height: 20px;
   font-size: 13px;
+  transition: color 0.1s linear;
+
+  &:hover {
+    color: $gl-link-color;
+  }
+
+  &:focus {
+    text-decoration: underline;
+    outline: none;
+    color: $gl-link-color;
+  }
 
   .fa {
     margin-right: 3px;
@@ -463,17 +575,18 @@ ul.notes {
   background: $white-light;
   padding: 1px 5px;
   font-size: 12px;
-  color: $gl-link-color;
+  color: $blue-500;
   margin-left: -55px;
   position: absolute;
   z-index: 10;
   width: 23px;
   height: 23px;
-  border: 1px solid $border-color;
+  border: 1px solid $blue-500;
   transition: transform .1s ease-in-out;
 
   &:hover {
-    background: $gl-info;
+    background: $blue-500;
+    border-color: $blue-600;
     color: $white-light;
     transform: scale(1.15);
   }
@@ -510,6 +623,15 @@ ul.notes {
 }
 
 .line-resolve-all-container {
+  @media (min-width: $screen-sm-min) {
+    margin-right: 0;
+    padding-left: $gl-padding;
+  }
+
+  > div {
+    white-space: nowrap;
+  }
+
   .btn-group {
     margin-left: -4px;
   }
@@ -517,6 +639,26 @@ ul.notes {
   .discussion-next-btn {
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
+  }
+
+  .btn.discussion-create-issue-btn {
+    margin-left: -4px;
+    border-radius: 0;
+    border-right: 0;
+
+    a {
+      padding: 0;
+      line-height: 0;
+
+      &:hover {
+        text-decoration: none;
+        border: 0;
+      }
+    }
+
+    .new-issue-for-discussion path {
+      fill: $gray-darkest;
+    }
   }
 }
 
@@ -540,9 +682,8 @@ ul.notes {
 }
 
 .line-resolve-btn {
-  display: inline-block;
   position: relative;
-  top: 2px;
+  top: 0;
   padding: 0;
   background-color: transparent;
   border: none;
@@ -553,7 +694,6 @@ ul.notes {
   }
 
   &:not(.is-disabled):hover,
-  &:not(.is-disabled):focus,
   &.is-active {
     color: $gl-text-green;
 
@@ -563,8 +703,14 @@ ul.notes {
   }
 
   svg {
-    position: relative;
     fill: $gray-darkest;
+    height: 16px;
+    width: 16px;
+  }
+
+  .loading {
+    margin: 0;
+    height: auto;
   }
 }
 
@@ -576,6 +722,10 @@ ul.notes {
       fill: $gray-darkest;
     }
   }
+}
+
+.discussion-notes .flash-container {
+  margin-bottom: 0;
 }
 
 // Merge request notes in diffs

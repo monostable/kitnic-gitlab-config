@@ -1,6 +1,10 @@
+import AjaxCache from '~/lib/utils/ajax_cache';
+import '~/flash'; /* global Flash */
+import FilteredSearchContainer from './container';
+
 class FilteredSearchVisualTokens {
   static getLastVisualTokenBeforeInput() {
-    const inputLi = document.querySelector('.input-token');
+    const inputLi = FilteredSearchContainer.container.querySelector('.input-token');
     const lastVisualToken = inputLi && inputLi.previousElementSibling;
 
     return {
@@ -10,21 +14,21 @@ class FilteredSearchVisualTokens {
   }
 
   static unselectTokens() {
-    const otherTokens = document.querySelectorAll('.js-visual-token .selectable.selected');
+    const otherTokens = FilteredSearchContainer.container.querySelectorAll('.js-visual-token .selectable.selected');
     [].forEach.call(otherTokens, t => t.classList.remove('selected'));
   }
 
-  static selectToken(tokenButton) {
+  static selectToken(tokenButton, forceSelection = false) {
     const selected = tokenButton.classList.contains('selected');
     FilteredSearchVisualTokens.unselectTokens();
 
-    if (!selected) {
+    if (!selected || forceSelection) {
       tokenButton.classList.add('selected');
     }
   }
 
   static removeSelectedToken() {
-    const selected = document.querySelector('.js-visual-token .selected');
+    const selected = FilteredSearchContainer.container.querySelector('.js-visual-token .selected');
 
     if (selected) {
       const li = selected.closest('.js-visual-token');
@@ -36,9 +40,48 @@ class FilteredSearchVisualTokens {
     return `
       <div class="selectable" role="button">
         <div class="name"></div>
-        <div class="value"></div>
+        <div class="value-container">
+          <div class="value"></div>
+          <div class="remove-token" role="button">
+            <i class="fa fa-close"></i>
+          </div>
+        </div>
       </div>
     `;
+  }
+
+  static updateLabelTokenColor(tokenValueContainer, tokenValue) {
+    const filteredSearchInput = FilteredSearchContainer.container.querySelector('.filtered-search');
+    const baseEndpoint = filteredSearchInput.dataset.baseEndpoint;
+    const labelsEndpoint = `${baseEndpoint}/labels.json`;
+
+    return AjaxCache.retrieve(labelsEndpoint)
+    .then((labels) => {
+      const matchingLabel = (labels || []).find(label => `~${gl.DropdownUtils.getEscapedText(label.title)}` === tokenValue);
+
+      if (!matchingLabel) {
+        return;
+      }
+
+      const tokenValueStyle = tokenValueContainer.style;
+      tokenValueStyle.backgroundColor = matchingLabel.color;
+      tokenValueStyle.color = matchingLabel.text_color;
+
+      if (matchingLabel.text_color === '#FFFFFF') {
+        const removeToken = tokenValueContainer.querySelector('.remove-token');
+        removeToken.classList.add('inverted');
+      }
+    })
+    .catch(() => new Flash('An error occurred while fetching label colors.'));
+  }
+
+  static renderVisualTokenValue(parentElement, tokenName, tokenValue) {
+    const tokenValueContainer = parentElement.querySelector('.value-container');
+    tokenValueContainer.querySelector('.value').innerText = tokenValue;
+
+    if (tokenName.toLowerCase() === 'label') {
+      FilteredSearchVisualTokens.updateLabelTokenColor(tokenValueContainer, tokenValue);
+    }
   }
 
   static addVisualTokenElement(name, value, isSearchTerm) {
@@ -48,14 +91,14 @@ class FilteredSearchVisualTokens {
 
     if (value) {
       li.innerHTML = FilteredSearchVisualTokens.createVisualTokenElementHTML();
-      li.querySelector('.value').innerText = value;
+      FilteredSearchVisualTokens.renderVisualTokenValue(li, name, value);
     } else {
       li.innerHTML = '<div class="name"></div>';
     }
     li.querySelector('.name').innerText = name;
 
-    const tokensContainer = document.querySelector('.tokens-container');
-    const input = document.querySelector('.filtered-search');
+    const tokensContainer = FilteredSearchContainer.container.querySelector('.tokens-container');
+    const input = FilteredSearchContainer.container.querySelector('.filtered-search');
     tokensContainer.insertBefore(li, input.parentElement);
   }
 
@@ -67,7 +110,7 @@ class FilteredSearchVisualTokens {
       const name = FilteredSearchVisualTokens.getLastTokenPartial();
       lastVisualToken.innerHTML = FilteredSearchVisualTokens.createVisualTokenElementHTML();
       lastVisualToken.querySelector('.name').innerText = name;
-      lastVisualToken.querySelector('.value').innerText = value;
+      FilteredSearchVisualTokens.renderVisualTokenValue(lastVisualToken, name, value);
     }
   }
 
@@ -77,14 +120,14 @@ class FilteredSearchVisualTokens {
     const addVisualTokenElement = FilteredSearchVisualTokens.addVisualTokenElement;
 
     if (isLastVisualTokenValid) {
-      addVisualTokenElement(tokenName, tokenValue);
+      addVisualTokenElement(tokenName, tokenValue, false);
     } else {
       const previousTokenName = lastVisualToken.querySelector('.name').innerText;
-      const tokensContainer = document.querySelector('.tokens-container');
+      const tokensContainer = FilteredSearchContainer.container.querySelector('.tokens-container');
       tokensContainer.removeChild(lastVisualToken);
 
       const value = tokenValue || tokenName;
-      addVisualTokenElement(previousTokenName, value);
+      addVisualTokenElement(previousTokenName, value, false);
     }
   }
 
@@ -120,7 +163,8 @@ class FilteredSearchVisualTokens {
 
       if (value) {
         const button = lastVisualToken.querySelector('.selectable');
-        button.removeChild(value);
+        const valueContainer = lastVisualToken.querySelector('.value-container');
+        button.removeChild(valueContainer);
         lastVisualToken.innerHTML = button.innerHTML;
       } else {
         lastVisualToken.closest('.tokens-container').removeChild(lastVisualToken);
@@ -129,7 +173,7 @@ class FilteredSearchVisualTokens {
   }
 
   static tokenizeInput() {
-    const input = document.querySelector('.filtered-search');
+    const input = FilteredSearchContainer.container.querySelector('.filtered-search');
     const { isLastVisualTokenValid } =
       gl.FilteredSearchVisualTokens.getLastVisualTokenBeforeInput();
 
@@ -145,7 +189,7 @@ class FilteredSearchVisualTokens {
   }
 
   static editToken(token) {
-    const input = document.querySelector('.filtered-search');
+    const input = FilteredSearchContainer.container.querySelector('.filtered-search');
 
     FilteredSearchVisualTokens.tokenizeInput();
 
@@ -174,9 +218,12 @@ class FilteredSearchVisualTokens {
   }
 
   static moveInputToTheRight() {
-    const input = document.querySelector('.filtered-search');
+    const input = FilteredSearchContainer.container.querySelector('.filtered-search');
+
+    if (!input) return;
+
     const inputLi = input.parentElement;
-    const tokenContainer = document.querySelector('.tokens-container');
+    const tokenContainer = FilteredSearchContainer.container.querySelector('.tokens-container');
 
     FilteredSearchVisualTokens.tokenizeInput();
 

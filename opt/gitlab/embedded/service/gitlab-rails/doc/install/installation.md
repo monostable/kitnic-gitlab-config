@@ -289,9 +289,9 @@ sudo usermod -aG redis git
 ### Clone the Source
 
     # Clone GitLab repository
-    sudo -u git -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 9-0-stable gitlab
+    sudo -u git -H git clone https://gitlab.com/gitlab-org/gitlab-ce.git -b 9-2-stable gitlab
 
-**Note:** You can change `9-0-stable` to `master` if you want the *bleeding edge* version, but never install master on a production server!
+**Note:** You can change `9-2-stable` to `master` if you want the *bleeding edge* version, but never install master on a production server!
 
 ### Configure It
 
@@ -423,6 +423,11 @@ which is the recommended location.
 
     sudo -u git -H bundle exec rake "gitlab:workhorse:install[/home/git/gitlab-workhorse]" RAILS_ENV=production
 
+You can specify a different Git repository by providing it as an extra paramter:
+
+    sudo -u git -H bundle exec rake "gitlab:workhorse:install[/home/git/gitlab-workhorse,https://example.com/gitlab-workhorse.git]" RAILS_ENV=production
+
+
 ### Initialize Database and Activate Advanced Features
 
     sudo -u git -H bundle exec rake gitlab:setup RAILS_ENV=production
@@ -459,30 +464,36 @@ Make GitLab start on boot:
 
 ### Install Gitaly
 
-As of GitLab 9.0 Gitaly is an **optional** component. Its
-configuration is expected to change in GitLab 9.1. It is OK to wait
-with setting up Gitaly until you upgrade to GitLab 9.1 or later.
+As of GitLab 9.1 Gitaly is an **optional** component. Its
+configuration is still changing regularly. It is OK to wait
+with setting up Gitaly until you upgrade to GitLab 9.2 or later.
 
     # Fetch Gitaly source with Git and compile with Go
     sudo -u git -H bundle exec rake "gitlab:gitaly:install[/home/git/gitaly]" RAILS_ENV=production
+
+You can specify a different Git repository by providing it as an extra paramter:
+
+    sudo -u git -H bundle exec rake "gitlab:gitaly:install[/home/git/gitaly,https://example.com/gitaly.git]" RAILS_ENV=production
+
+Next, make sure gitaly configured:
 
     # Restrict Gitaly socket access
     sudo chmod 0700 /home/git/gitlab/tmp/sockets/private
     sudo chown git /home/git/gitlab/tmp/sockets/private
 
-    # Configure Gitaly
-    echo 'GITALY_SOCKET_PATH=/home/git/gitlab/tmp/sockets/private/gitaly.socket' | \
-      sudo -u git tee -a /home/git/gitaly/env
+    # If you are using non-default settings you need to update config.toml
+    cd /home/git/gitaly
+    sudo -u git -H editor config.toml
 
     # Enable Gitaly in the init script
     echo 'gitaly_enabled=true' | sudo tee -a /etc/default/gitlab
 
-Next, edit `/home/git/gitlab/config/gitlab.yml` and make sure `socket_path` in
+Next, edit `/home/git/gitlab/config/gitlab.yml` and make sure `enabled: true` in
 the `gitaly:` section is uncommented.
 
     # <- gitlab.yml indentation starts here
       gitaly:
-        socket_path: tmp/sockets/private/gitaly.socket
+        enabled: true
 
 For more information about configuring Gitaly see
 [doc/administration/gitaly](../administration/gitaly).
