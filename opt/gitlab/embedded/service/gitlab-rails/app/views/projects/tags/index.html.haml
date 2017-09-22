@@ -1,6 +1,7 @@
 - @no_container = true
 - @sort ||= sort_value_recently_updated
 - page_title "Tags"
+- add_to_breadcrumbs("Repository", project_tree_path(@project))
 = render "projects/commits/head"
 
 .flex-list{ class: container_class }
@@ -24,7 +25,7 @@
             %li
               = link_to title, filter_tags_path(sort: value), class: ("is-active" if @sort == value)
       - if can?(current_user, :push_code, @project)
-        = link_to new_namespace_project_tag_path(@project.namespace, @project), class: 'btn btn-create new-tag-btn' do
+        = link_to new_project_tag_path(@project), class: 'btn btn-create new-tag-btn' do
           New tag
 
   .tags

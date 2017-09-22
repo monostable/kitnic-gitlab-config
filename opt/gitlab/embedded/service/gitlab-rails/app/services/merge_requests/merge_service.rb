@@ -26,10 +26,12 @@ module MergeRequests
       merge_request.in_locked_state do
         if commit
           after_merge
+          clean_merge_jid
           success
         end
       end
     rescue MergeError => e
+      clean_merge_jid
       log_merge_error(e.message, save_message_on_model: true)
     end
 
@@ -49,7 +51,7 @@ module MergeRequests
       raise MergeError, 'Conflicts detected during merge' unless commit_id
 
       merge_request.update(merge_commit_sha: commit_id)
-    rescue GitHooksService::PreReceiveError => e
+    rescue Gitlab::Git::HooksService::PreReceiveError => e
       raise MergeError, e.message
     rescue StandardError => e
       raise MergeError, "Something went wrong during merge: #{e.message}"
@@ -61,9 +63,17 @@ module MergeRequests
       MergeRequests::PostMergeService.new(project, current_user).execute(merge_request)
 
       if params[:should_remove_source_branch].present? || @merge_request.force_remove_source_branch?
-        DeleteBranchService.new(@merge_request.source_project, branch_deletion_user).
-          execute(merge_request.source_branch)
+        # Verify again that the source branch can be removed, since branch may be protected,
+        # or the source branch may have been updated.
+        if @merge_request.can_remove_source_branch?(branch_deletion_user)
+          DeleteBranchService.new(@merge_request.source_project, branch_deletion_user)
+            .execute(merge_request.source_branch)
+        end
       end
+    end
+
+    def clean_merge_jid
+      merge_request.update_column(:merge_jid, nil)
     end
 
     def branch_deletion_user

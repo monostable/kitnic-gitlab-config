@@ -1,7 +1,7 @@
 require 'digest/md5'
 
 class Key < ActiveRecord::Base
-  include AfterCommitQueue
+  include Gitlab::CurrentSettings
   include Sortable
 
   LAST_USED_AT_REFRESH_TIME = 1.day.to_i
@@ -13,25 +13,28 @@ class Key < ActiveRecord::Base
   validates :title,
     presence: true,
     length: { maximum: 255 }
+
   validates :key,
     presence: true,
     length: { maximum: 5000 },
     format: { with: /\A(ssh|ecdsa)-.*\Z/ }
-  validates :key,
-    format: { without: /\n|\r/, message: 'should be a single line' }
+
   validates :fingerprint,
     uniqueness: true,
     presence: { message: 'cannot be generated' }
 
+  validate :key_meets_restrictions
+
   delegate :name, :email, to: :user, prefix: true
 
-  after_create :add_to_shell
-  after_create :notify_user
+  after_commit :add_to_shell, on: :create
+  after_commit :notify_user, on: :create
   after_create :post_create_hook
-  after_destroy :remove_from_shell
+  after_commit :remove_from_shell, on: :destroy
   after_destroy :post_destroy_hook
 
   def key=(value)
+    value&.delete!("\n\r")
     value.strip! unless value.blank?
     write_attribute(:key, value)
   end
@@ -74,12 +77,16 @@ class Key < ActiveRecord::Base
     GitlabShellWorker.perform_async(
       :remove_key,
       shell_id,
-      key,
+      key
     )
   end
 
   def post_destroy_hook
     SystemHooksService.new.execute_hooks_for(self, :destroy)
+  end
+
+  def public_key
+    @public_key ||= Gitlab::SSHPublicKey.new(key)
   end
 
   private
@@ -89,10 +96,30 @@ class Key < ActiveRecord::Base
 
     return unless self.key.present?
 
-    self.fingerprint = Gitlab::KeyFingerprint.new(self.key).fingerprint
+    self.fingerprint = public_key.fingerprint
+  end
+
+  def key_meets_restrictions
+    restriction = current_application_settings.key_restriction_for(public_key.type)
+
+    if restriction == ApplicationSetting::FORBIDDEN_KEY_VALUE
+      errors.add(:key, forbidden_key_type_message)
+    elsif public_key.bits < restriction
+      errors.add(:key, "must be at least #{restriction} bits")
+    end
+  end
+
+  def forbidden_key_type_message
+    allowed_types =
+      current_application_settings
+        .allowed_key_types
+        .map(&:upcase)
+        .to_sentence(last_word_connector: ', or ', two_words_connector: ' or ')
+
+    "type is forbidden. Must be #{allowed_types}"
   end
 
   def notify_user
-    run_after_commit { NotificationService.new.new_key(self) }
+    NotificationService.new.new_key(self)
   end
 end

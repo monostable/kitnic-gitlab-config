@@ -70,7 +70,7 @@
     &.active a {
       border-bottom: 2px solid $link-underline-blue;
       color: $black;
-      font-weight: 600;
+      font-weight: $gl-font-weight-bold;
 
       .badge {
         color: $black;
@@ -161,6 +161,8 @@
   }
 
   .nav-controls {
+    @include new-style-dropdown;
+
     display: inline-block;
     float: right;
     text-align: right;
@@ -182,20 +184,18 @@
       }
     }
 
+    &.nav-controls-new-nav {
+      > .dropdown {
+        margin-right: 0;
+      }
+    }
+
     > .btn-grouped {
       float: none;
     }
 
     .icon-label {
       display: none;
-    }
-
-    .btn,
-    .dropdown,
-    .dropdown-toggle,
-    input,
-    form {
-      height: 35px;
     }
 
     input {
@@ -253,7 +253,6 @@
 
       // Applies on /dashboard/issues
       .project-item-select-holder {
-        display: block;
         margin: 0;
       }
     }
@@ -285,12 +284,51 @@
   }
 }
 
+.project-item-select-holder.btn-group {
+  display: flex;
+  max-width: 350px;
+  overflow: hidden;
+  float: right;
+
+  .new-project-item-link {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .new-project-item-select-button {
+    width: 32px;
+  }
+}
+
+.empty-state .project-item-select-holder.btn-group {
+  float: none;
+  display: inline-block;
+
+  .btn {
+    // overrides styles applied to plain `.empty-state .btn`
+    margin: 10px 0;
+    max-width: 300px;
+    width: auto;
+
+    @media(max-width: $screen-xs-max) {
+      max-width: 250px;
+    }
+
+  }
+}
+
+.new-project-item-select-button .fa-caret-down {
+  margin-left: 2px;
+}
+
 .layout-nav {
   width: 100%;
   background: $gray-light;
   border-bottom: 1px solid $border-color;
   transition: padding $sidebar-transition-duration;
   text-align: center;
+  margin-top: $new-navbar-height;
 
   .container-fluid {
     position: relative;
@@ -324,10 +362,10 @@
       position: absolute;
       top: 7px;
       right: 15px;
-      z-index: 2;
+      z-index: 300;
 
       li.active {
-        font-weight: bold;
+        font-weight: $gl-font-weight-bold;
       }
     }
   }
@@ -346,6 +384,10 @@
       }
     }
   }
+}
+
+.with-performance-bar .layout-nav {
+  margin-top: $header-height + $performance-bar-height;
 }
 
 .scrolling-tabs-container {
@@ -436,14 +478,30 @@
       top: ($header-height + 1) * 3;
 
       &.affix {
-        top: 0;
+        top: $header-height;
       }
     }
   }
 }
 
-.activities {
-  .nav-block {
+.with-performance-bar .page-with-layout-nav {
+  .right-sidebar {
+    top: ($header-height + 1) * 2 + $performance-bar-height;
+  }
+
+  &.page-with-sub-nav {
+    .right-sidebar {
+      top: ($header-height + 1) * 3 + $performance-bar-height;
+
+      &.affix {
+        top: $header-height + $performance-bar-height;
+      }
+    }
+  }
+}
+
+.nav-block {
+  &.activities {
     border-bottom: 1px solid $border-color;
 
     .nav-links {

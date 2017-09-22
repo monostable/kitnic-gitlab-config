@@ -3,8 +3,9 @@
 /* global ShortcutsNavigation */
 /* global sidebar */
 
-require('mousetrap');
-require('./shortcuts_navigation');
+import _ from 'underscore';
+import 'mousetrap';
+import './shortcuts_navigation';
 
 (function() {
   var extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
@@ -19,7 +20,7 @@ require('./shortcuts_navigation');
       Mousetrap.bind('m', this.openSidebarDropdown.bind(this, 'milestone'));
       Mousetrap.bind('r', (function(_this) {
         return function() {
-          _this.replyWithSelectedText();
+          _this.replyWithSelectedText(isMergeRequest);
           return false;
         };
       })(this));
@@ -37,9 +38,15 @@ require('./shortcuts_navigation');
       }
     }
 
-    ShortcutsIssuable.prototype.replyWithSelectedText = function() {
-      var quote, documentFragment, selected, separator;
-      var replyField = $('.js-main-target-form #note_note');
+    ShortcutsIssuable.prototype.replyWithSelectedText = function(isMergeRequest) {
+      var quote, documentFragment, el, selected, separator;
+      let replyField;
+
+      if (isMergeRequest) {
+        replyField = $('.js-main-target-form #note_note');
+      } else {
+        replyField = $('.js-main-target-form .js-vue-comment-form');
+      }
 
       documentFragment = window.gl.utils.getSelectedFragment();
       if (!documentFragment) {
@@ -47,10 +54,8 @@ require('./shortcuts_navigation');
         return;
       }
 
-      // If the documentFragment contains more than just Markdown, don't copy as GFM.
-      if (documentFragment.querySelector('.md, .wiki')) return;
-
-      selected = window.gl.CopyAsGFM.nodeToGFM(documentFragment);
+      el = window.gl.CopyAsGFM.transformGFMSelection(documentFragment.cloneNode(true));
+      selected = window.gl.CopyAsGFM.nodeToGFM(el);
 
       if (selected.trim() === "") {
         return;
@@ -58,14 +63,15 @@ require('./shortcuts_navigation');
       quote = _.map(selected.split("\n"), function(val) {
         return ("> " + val).trim() + "\n";
       });
+
       // If replyField already has some content, add a newline before our quote
       separator = replyField.val().trim() !== "" && "\n\n" || '';
-      replyField.val(function(_, current) {
+      replyField.val(function(a, current) {
         return current + separator + quote.join('') + "\n";
       });
 
       // Trigger autosave
-      replyField.trigger('input');
+      replyField.trigger('input').trigger('change');
 
       // Trigger autosize
       var event = document.createEvent('Event');
@@ -79,7 +85,9 @@ require('./shortcuts_navigation');
     ShortcutsIssuable.prototype.editIssue = function() {
       var $editBtn;
       $editBtn = $('.issuable-edit');
-      return gl.utils.visitUrl($editBtn.attr('href'));
+      // Need to click the element as on issues, editing is inline
+      // on merge request, editing is on a different page
+      $editBtn.get(0).click();
     };
 
     ShortcutsIssuable.prototype.openSidebarDropdown = function(name) {

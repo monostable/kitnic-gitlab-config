@@ -2,12 +2,16 @@ module API
   class Groups < Grape::API
     include PaginationParams
 
-    before { authenticate! }
+    before { authenticate_non_get! }
 
     helpers do
       params :optional_params_ce do
         optional :description, type: String, desc: 'The description of the group'
-        optional :visibility, type: String, values: Gitlab::VisibilityLevel.string_values, desc: 'The visibility of the group'
+        optional :visibility, type: String,
+                              values: Gitlab::VisibilityLevel.string_values,
+                              default: Gitlab::VisibilityLevel.string_level(
+                                Gitlab::CurrentSettings.current_application_settings.default_group_visibility),
+                              desc: 'The visibility of the group'
         optional :lfs_enabled, type: Boolean, desc: 'Enable/disable LFS for the projects in this group'
         optional :request_access_enabled, type: Boolean, desc: 'Allow users to request member access'
         optional :share_with_group_lock, type: Boolean, desc: 'Prevent sharing a project with another group within this group'
@@ -24,7 +28,7 @@ module API
       def present_groups(groups, options = {})
         options = options.reverse_merge(
           with: Entities::Group,
-          current_user: current_user,
+          current_user: current_user
         )
 
         groups = groups.with_statistics if options[:statistics]
@@ -47,16 +51,8 @@ module API
         use :pagination
       end
       get do
-        groups = if params[:owned]
-                   current_user.owned_groups
-                 elsif current_user.admin
-                   Group.all
-                 elsif params[:all_available]
-                   GroupsFinder.new(current_user).execute
-                 else
-                   current_user.groups
-                 end
-
+        find_params = { all_available: params[:all_available], owned: params[:owned] }
+        groups = GroupsFinder.new(current_user, find_params).execute
         groups = groups.search(params[:search]) if params[:search].present?
         groups = groups.where.not(id: params[:skip_groups]) if params[:skip_groups].present?
         groups = groups.reorder(params[:order_by] => params[:sort])
@@ -70,16 +66,25 @@ module API
       params do
         requires :name, type: String, desc: 'The name of the group'
         requires :path, type: String, desc: 'The path of the group'
-        optional :parent_id, type: Integer, desc: 'The parent group id for creating nested group'
+
+        if ::Group.supports_nested_groups?
+          optional :parent_id, type: Integer, desc: 'The parent group id for creating nested group'
+        end
+
         use :optional_params
       end
       post do
-        authorize! :create_group
+        parent_group = find_group!(params[:parent_id]) if params[:parent_id].present?
+        if parent_group
+          authorize! :create_subgroup, parent_group
+        else
+          authorize! :create_group
+        end
 
         group = ::Groups::CreateService.new(current_user, declared_params(include_missing: false)).execute
 
         if group.persisted?
-          present group, with: Entities::Group, current_user: current_user
+          present group, with: Entities::GroupDetail, current_user: current_user
         else
           render_api_error!("Failed to save group #{group.errors.messages}", 400)
         end
@@ -89,7 +94,7 @@ module API
     params do
       requires :id, type: String, desc: 'The ID of a group'
     end
-    resource :groups, requirements: { id: %r{[^/]+} } do
+    resource :groups, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
       desc 'Update a group. Available only for users who can administrate groups.' do
         success Entities::Group
       end
@@ -97,8 +102,6 @@ module API
         optional :name, type: String, desc: 'The name of the group'
         optional :path, type: String, desc: 'The path of the group'
         use :optional_params
-        at_least_one_of :name, :path, :description, :visibility,
-                        :lfs_enabled, :request_access_enabled
       end
       put ':id' do
         group = find_group!(params[:id])
@@ -123,7 +126,10 @@ module API
       delete ":id" do
         group = find_group!(params[:id])
         authorize! :admin_group, group
-        ::Groups::DestroyService.new(group, current_user).execute
+
+        destroy_conditionally!(group) do |group|
+          ::Groups::DestroyService.new(group, current_user).execute
+        end
       end
 
       desc 'Get a list of projects in this group.' do
@@ -147,8 +153,8 @@ module API
       end
       get ":id/projects" do
         group = find_group!(params[:id])
-        projects = GroupProjectsFinder.new(group: group, current_user: current_user).execute
-        projects = filter_projects(projects)
+        projects = GroupProjectsFinder.new(group: group, current_user: current_user, params: project_finder_params).execute
+        projects = reorder_projects(projects)
         entity = params[:simple] ? Entities::BasicProjectDetails : Entities::Project
         present paginate(projects), with: entity, current_user: current_user
       end

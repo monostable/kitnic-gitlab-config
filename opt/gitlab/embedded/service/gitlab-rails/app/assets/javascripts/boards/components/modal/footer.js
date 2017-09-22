@@ -2,8 +2,7 @@
 /* global Flash */
 
 import Vue from 'vue';
-
-require('./lists_dropdown');
+import './lists_dropdown';
 
 const ModalStore = gl.issueBoards.ModalStore;
 
@@ -27,9 +26,10 @@ gl.issueBoards.ModalFooter = Vue.extend({
   },
   methods: {
     addIssues() {
-      const list = this.modal.selectedList || this.state.lists[0];
+      const firstListIndex = 1;
+      const list = this.modal.selectedList || this.state.lists[firstListIndex];
       const selectedIssues = ModalStore.getSelectedIssues();
-      const issueIds = selectedIssues.map(issue => issue.globalId);
+      const issueIds = selectedIssues.map(issue => issue.id);
 
       // Post the data to the backend
       gl.boardService.bulkUpdate(issueIds, {

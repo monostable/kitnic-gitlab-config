@@ -1,4 +1,5 @@
 import Vue from 'vue';
+import userAvatarLink from '../../vue_shared/components/user_avatar/user_avatar_link.vue';
 import eventHub from '../eventhub';
 
 const Store = gl.issueBoards.BoardsStore;
@@ -38,6 +39,9 @@ gl.issueBoards.IssueCardInner = Vue.extend({
       maxCounter: 99,
     };
   },
+  components: {
+    userAvatarLink,
+  },
   computed: {
     numberOverLimit() {
       return this.issue.assignees.length - this.limitBeforeCounter;
@@ -60,10 +64,13 @@ gl.issueBoards.IssueCardInner = Vue.extend({
       return this.issue.assignees.length > this.numberOverLimit;
     },
     cardUrl() {
-      return `${this.issueLinkBase}/${this.issue.id}`;
+      return `${this.issueLinkBase}/${this.issue.iid}`;
     },
     issueId() {
-      return `#${this.issue.id}`;
+      if (this.issue.iid) {
+        return `#${this.issue.iid}`;
+      }
+      return false;
     },
     showLabelFooter() {
       return this.issue.labels.find(l => this.showLabel(l)) !== undefined;
@@ -93,9 +100,8 @@ gl.issueBoards.IssueCardInner = Vue.extend({
       return `Avatar for ${assignee.name}`;
     },
     showLabel(label) {
-      if (!this.list) return true;
-
-      return !this.list.label || label.id !== this.list.label.id;
+      if (!label.id) return false;
+      return true;
     },
     filterByLabel(label, e) {
       if (!this.updateFilters) return;
@@ -140,29 +146,23 @@ gl.issueBoards.IssueCardInner = Vue.extend({
             :title="issue.title">{{ issue.title }}</a>
           <span
             class="card-number"
-            v-if="issue.id"
+            v-if="issueId"
           >
             {{ issueId }}
           </span>
         </h4>
         <div class="card-assignee">
-          <a
-            class="has-tooltip js-no-trigger"
-            :href="assigneeUrl(assignee)"
-            :title="assigneeUrlTitle(assignee)"
+          <user-avatar-link
             v-for="(assignee, index) in issue.assignees"
+            :key="assignee.id"
             v-if="shouldRenderAssignee(index)"
-            data-container="body"
-            data-placement="bottom"
-          >
-            <img
-              class="avatar avatar-inline s20"
-              :src="assignee.avatar"
-              width="20"
-              height="20"
-              :alt="avatarUrlTitle(assignee)"
-            />
-          </a>
+            class="js-no-trigger"
+            :link-href="assigneeUrl(assignee)"
+            :img-alt="avatarUrlTitle(assignee)"
+            :img-src="assignee.avatar"
+            :tooltip-text="assigneeUrlTitle(assignee)"
+            tooltip-placement="bottom"
+          />
           <span
             class="avatar-counter has-tooltip"
             :title="assigneeCounterTooltip"

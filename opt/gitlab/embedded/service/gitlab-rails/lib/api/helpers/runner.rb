@@ -1,6 +1,8 @@
 module API
   module Helpers
     module Runner
+      include Gitlab::CurrentSettings
+
       JOB_TOKEN_HEADER = 'HTTP_JOB_TOKEN'.freeze
       JOB_TOKEN_PARAM = :token
       UPDATE_RUNNER_EVERY = 10 * 60
@@ -46,7 +48,8 @@ module API
 
         yield if block_given?
 
-        forbidden!('Project has been deleted!') unless job.project
+        project = job.project
+        forbidden!('Project has been deleted!') if project.nil? || project.pending_delete?
         forbidden!('Job has been erased!') if job.erased?
       end
 

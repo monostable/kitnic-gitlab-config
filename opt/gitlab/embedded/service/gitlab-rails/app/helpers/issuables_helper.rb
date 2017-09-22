@@ -26,16 +26,16 @@ module IssuablesHelper
     project = issuable.project
 
     if issuable.is_a?(MergeRequest)
-      namespace_project_merge_request_path(project.namespace, project, issuable.iid, :json)
+      project_merge_request_path(project, issuable.iid, :json)
     else
-      namespace_project_issue_path(project.namespace, project, issuable.iid, :json)
+      project_issue_path(project, issuable.iid, :json)
     end
   end
 
   def serialize_issuable(issuable)
     case issuable
     when Issue
-      IssueSerializer.new.represent(issuable).to_json
+      IssueSerializer.new(current_user: current_user, project: issuable.project).represent(issuable).to_json
     when MergeRequest
       MergeRequestSerializer
         .new(current_user: current_user, project: issuable.project)
@@ -126,24 +126,20 @@ module IssuablesHelper
   end
 
   def issuable_meta(issuable, project, text)
-    output = content_tag(:strong, class: "identifier") do
-      concat("#{text} ")
-      concat(to_url_reference(issuable))
-    end
-
-    output << " opened #{time_ago_with_tooltip(issuable.created_at)} by ".html_safe
+    output = ""
+    output << "Opened #{time_ago_with_tooltip(issuable.created_at)} by ".html_safe
     output << content_tag(:strong) do
       author_output = link_to_member(project, issuable.author, size: 24, mobile_classes: "hidden-xs", tooltip: true)
       author_output << link_to_member(project, issuable.author, size: 24, by_username: true, avatar: false, mobile_classes: "hidden-sm hidden-md hidden-lg")
     end
 
-    if issuable.tasks?
-      output << "&ensp;".html_safe
-      output << content_tag(:span, issuable.task_status, id: "task_status", class: "hidden-xs hidden-sm")
-      output << content_tag(:span, issuable.task_status_short, id: "task_status_short", class: "hidden-md hidden-lg")
-    end
+    output << "&ensp;".html_safe
+    output << content_tag(:span, (issuable_first_contribution_icon if issuable.first_contribution?), class: 'has-tooltip', title: _('1st contribution!'))
 
-    output
+    output << content_tag(:span, (issuable.task_status if issuable.tasks?), id: "task_status", class: "hidden-xs hidden-sm")
+    output << content_tag(:span, (issuable.task_status_short if issuable.tasks?), id: "task_status_short", class: "hidden-md hidden-lg")
+
+    output.html_safe
   end
 
   def issuable_todo(issuable)
@@ -153,7 +149,7 @@ module IssuablesHelper
   end
 
   def issuable_labels_tooltip(labels, limit: 5)
-    first, last = labels.partition.with_index{ |_, i| i < limit  }
+    first, last = labels.partition.with_index { |_, i| i < limit  }
 
     label_names = first.collect(&:name)
     label_names << "and #{last.size} more" unless last.empty?
@@ -167,11 +163,7 @@ module IssuablesHelper
     }
 
     state_title = titles[state] || state.to_s.humanize
-
-    count =
-      Rails.cache.fetch(issuables_state_counter_cache_key(issuable_type, state), expires_in: 2.minutes) do
-        issuables_count_for_state(issuable_type, state)
-      end
+    count = issuables_count_for_state(issuable_type, state)
 
     html = content_tag(:span, state_title)
     html << " " << content_tag(:span, number_with_delimiter(count), class: 'badge')
@@ -179,8 +171,22 @@ module IssuablesHelper
     html.html_safe
   end
 
+  def issuable_first_contribution_icon
+    content_tag(:span, class: 'fa-stack') do
+      concat(icon('certificate', class: "fa-stack-2x"))
+      concat(content_tag(:strong, '1', class: 'fa-inverse fa-stack-1x'))
+    end
+  end
+
   def assigned_issuables_count(issuable_type)
-    current_user.public_send("assigned_open_#{issuable_type}_count")
+    case issuable_type
+    when :issues
+      current_user.assigned_open_issues_count
+    when :merge_requests
+      current_user.assigned_open_merge_requests_count
+    else
+      raise ArgumentError, "invalid issuable `#{issuable_type}`"
+    end
   end
 
   def issuable_filter_params
@@ -201,40 +207,98 @@ module IssuablesHelper
     issuable_filter_params.any? { |k| params.key?(k) }
   end
 
+  def issuable_initial_data(issuable)
+    data = {
+      endpoint: project_issue_path(@project, issuable),
+      canUpdate: can?(current_user, :update_issue, issuable),
+      canDestroy: can?(current_user, :destroy_issue, issuable),
+      issuableRef: issuable.to_reference,
+      markdownPreviewPath: preview_markdown_path(@project),
+      markdownDocsPath: help_page_path('user/markdown'),
+      issuableTemplates: issuable_templates(issuable),
+      projectPath: ref_project.path,
+      projectNamespace: ref_project.namespace.full_path,
+      initialTitleHtml: markdown_field(issuable, :title),
+      initialTitleText: issuable.title,
+      initialDescriptionHtml: markdown_field(issuable, :description),
+      initialDescriptionText: issuable.description,
+      initialTaskStatus: issuable.task_status
+    }
+
+    data.merge!(updated_at_by(issuable))
+
+    data.to_json
+  end
+
+  def updated_at_by(issuable)
+    return {} unless issuable.edited?
+
+    {
+      updatedAt: issuable.updated_at.to_time.iso8601,
+      updatedBy: {
+        name: issuable.last_edited_by.name,
+        path: user_path(issuable.last_edited_by)
+      }
+    }
+  end
+
+  def issuables_count_for_state(issuable_type, state)
+    finder = public_send("#{issuable_type}_finder") # rubocop:disable GitlabSecurity/PublicSend
+
+    Gitlab::IssuablesCountForState.new(finder)[state]
+  end
+
+  def close_issuable_url(issuable)
+    issuable_url(issuable, close_reopen_params(issuable, :close))
+  end
+
+  def reopen_issuable_url(issuable)
+    issuable_url(issuable, close_reopen_params(issuable, :reopen))
+  end
+
+  def close_reopen_issuable_url(issuable, should_inverse = false)
+    issuable.closed? ^ should_inverse ? reopen_issuable_url(issuable) : close_issuable_url(issuable)
+  end
+
+  def issuable_url(issuable, *options)
+    case issuable
+    when Issue
+      issue_url(issuable, *options)
+    when MergeRequest
+      merge_request_url(issuable, *options)
+    end
+  end
+
+  def issuable_button_visibility(issuable, closed)
+    case issuable
+    when Issue
+      issue_button_visibility(issuable, closed)
+    when MergeRequest
+      merge_request_button_visibility(issuable, closed)
+    end
+  end
+
+  def issuable_close_reopen_button_method(issuable)
+    case issuable
+    when Issue
+      ''
+    when MergeRequest
+      'put'
+    end
+  end
+
+  def issuable_author_is_current_user(issuable)
+    issuable.author == current_user
+  end
+
+  def issuable_display_type(issuable)
+    issuable.model_name.human.downcase
+  end
+
   private
 
   def sidebar_gutter_collapsed?
     cookies[:collapsed_gutter] == 'true'
-  end
-
-  def base_issuable_scope(issuable)
-    issuable.project.send(issuable.class.table_name).send(issuable_state_scope(issuable))
-  end
-
-  def issuable_state_scope(issuable)
-    if issuable.respond_to?(:merged?) && issuable.merged?
-      :merged
-    else
-      issuable.open? ? :opened : :closed
-    end
-  end
-
-  def issuables_count_for_state(issuable_type, state)
-    @counts ||= {}
-    @counts[issuable_type] ||= public_send("#{issuable_type}_finder").count_by_state
-    @counts[issuable_type][state]
-  end
-
-  IRRELEVANT_PARAMS_FOR_CACHE_KEY = %i[utf8 sort page].freeze
-  private_constant :IRRELEVANT_PARAMS_FOR_CACHE_KEY
-
-  def issuables_state_counter_cache_key(issuable_type, state)
-    opts = params.with_indifferent_access
-    opts[:state] = state
-    opts.except!(*IRRELEVANT_PARAMS_FOR_CACHE_KEY)
-    opts.delete_if { |_, value| value.blank? }
-
-    hexdigest(['issuables_count', issuable_type, opts.sort].flatten.join('-'))
   end
 
   def issuable_templates(issuable)
@@ -244,8 +308,6 @@ module IssuablesHelper
         issue_template_names
       when MergeRequest
         merge_request_template_names
-      else
-        raise 'Unknown issuable type!'
       end
   end
 
@@ -258,7 +320,7 @@ module IssuablesHelper
   end
 
   def selected_template(issuable)
-    params[:issuable_template] if issuable_templates(issuable).any?{ |template| template[:name] == params[:issuable_template] }
+    params[:issuable_template] if issuable_templates(issuable).any? { |template| template[:name] == params[:issuable_template] }
   end
 
   def issuable_todo_button_data(issuable, todo, is_collapsed)
@@ -269,10 +331,38 @@ module IssuablesHelper
       mark_icon: (is_collapsed ? icon('check-square', class: 'todo-undone') : nil),
       issuable_id: issuable.id,
       issuable_type: issuable.class.name.underscore,
-      url: namespace_project_todos_path(@project.namespace, @project),
+      url: project_todos_path(@project),
       delete_path: (dashboard_todo_path(todo) if todo),
       placement: (is_collapsed ? 'left' : nil),
       container: (is_collapsed ? 'body' : nil)
+    }
+  end
+
+  def close_reopen_params(issuable, action)
+    {
+      issuable.model_name.to_s.underscore => { state_event: action }
+    }.tap do |params|
+      params[:format] = :json if issuable.is_a?(Issue)
+    end
+  end
+
+  def labels_path
+    if @project
+      project_labels_path(@project)
+    elsif @group
+      group_labels_path(@group)
+    end
+  end
+
+  def issuable_sidebar_options(issuable, can_edit_issuable)
+    {
+      endpoint: "#{issuable_json_path(issuable)}?basic=true",
+      moveIssueEndpoint: move_namespace_project_issue_path(namespace_id: issuable.project.namespace.to_param, project_id: issuable.project, id: issuable),
+      projectsAutocompleteEndpoint: autocomplete_projects_path(project_id: @project.id),
+      editable: can_edit_issuable,
+      currentUser: current_user.as_json(only: [:username, :id, :name], methods: :avatar_url),
+      rootPath: root_path,
+      fullPath: @project.full_path
     }
   end
 end

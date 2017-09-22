@@ -4,6 +4,8 @@ module API
 
     before { authenticate! }
 
+    helpers ::Gitlab::IssuableMetadata
+
     helpers do
       def find_issues(args = {})
         args = params.merge(args)
@@ -13,6 +15,7 @@ module API
         args[:label_name] = args.delete(:labels)
 
         issues = IssuesFinder.new(current_user, args).execute
+          .preload(:assignees, :labels, :notes, :timelogs)
 
         issues.reorder(args[:order_by] => args[:sort])
       end
@@ -27,6 +30,13 @@ module API
         optional :milestone, type: String, desc: 'Return issues for a specific milestone'
         optional :iids, type: Array[Integer], desc: 'The IID array of issues'
         optional :search, type: String, desc: 'Search issues for text present in the title or description'
+        optional :created_after, type: DateTime, desc: 'Return issues created after the specified time'
+        optional :created_before, type: DateTime, desc: 'Return issues created before the specified time'
+        optional :author_id, type: Integer, desc: 'Return issues which are authored by the user with the given ID'
+        optional :assignee_id, type: Integer, desc: 'Return issues which are assigned to the user with the given ID'
+        optional :scope, type: String, values: %w[created-by-me assigned-to-me all],
+                         desc: 'Return issues for the given scope: `created-by-me`, `assigned-to-me` or `all`'
+        optional :my_reaction_emoji, type: String, desc: 'Return issues reacted by the authenticated user by the given emoji'
         use :pagination
       end
 
@@ -53,18 +63,26 @@ module API
         optional :state, type: String, values: %w[opened closed all], default: 'all',
                          desc: 'Return opened, closed, or all issues'
         use :issues_params
+        optional :scope, type: String, values: %w[created-by-me assigned-to-me all], default: 'created-by-me',
+                         desc: 'Return issues for the given scope: `created-by-me`, `assigned-to-me` or `all`'
       end
       get do
-        issues = find_issues(scope: 'authored')
+        issues = find_issues
 
-        present paginate(issues), with: Entities::IssueBasic, current_user: current_user
+        options = {
+          with: Entities::IssueBasic,
+          current_user: current_user,
+          issuable_metadata: issuable_meta_data(issues, 'Issue')
+        }
+
+        present paginate(issues), options
       end
     end
 
     params do
       requires :id, type: String, desc: 'The ID of a group'
     end
-    resource :groups, requirements: { id: %r{[^/]+} } do
+    resource :groups, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
       desc 'Get a list of group issues' do
         success Entities::IssueBasic
       end
@@ -78,14 +96,20 @@ module API
 
         issues = find_issues(group_id: group.id)
 
-        present paginate(issues), with: Entities::IssueBasic, current_user: current_user
+        options = {
+          with: Entities::IssueBasic,
+          current_user: current_user,
+          issuable_metadata: issuable_meta_data(issues, 'Issue')
+        }
+
+        present paginate(issues), options
       end
     end
 
     params do
       requires :id, type: String, desc: 'The ID of a project'
     end
-    resource :projects, requirements: { id: %r{[^/]+} } do
+    resource :projects, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
       include TimeTrackingEndpoints
 
       desc 'Get a list of project issues' do
@@ -101,7 +125,14 @@ module API
 
         issues = find_issues(project_id: project.id)
 
-        present paginate(issues), with: Entities::IssueBasic, current_user: current_user, project: user_project
+        options = {
+          with: Entities::IssueBasic,
+          current_user: current_user,
+          project: user_project,
+          issuable_metadata: issuable_meta_data(issues, 'Issue')
+        }
+
+        present paginate(issues), options
       end
 
       desc 'Get a single project issue' do
@@ -110,7 +141,7 @@ module API
       params do
         requires :issue_iid, type: Integer, desc: 'The internal ID of a project issue'
       end
-      get ":id/issues/:issue_iid" do
+      get ":id/issues/:issue_iid", as: :api_v4_project_issue do
         issue = find_project_issue(params[:issue_iid])
         present issue, with: Entities::Issue, current_user: current_user, project: user_project
       end
@@ -222,7 +253,8 @@ module API
         not_found!('Issue') unless issue
 
         authorize!(:destroy_issue, issue)
-        issue.destroy
+
+        destroy_conditionally!(issue)
       end
 
       desc 'List merge requests closing issue'  do
@@ -238,6 +270,22 @@ module API
         merge_requests = MergeRequestsFinder.new(current_user, project_id: user_project.id).execute.where(id: merge_request_ids)
 
         present paginate(merge_requests), with: Entities::MergeRequestBasic, current_user: current_user, project: user_project
+      end
+
+      desc 'Get the user agent details for an issue' do
+        success Entities::UserAgentDetail
+      end
+      params do
+        requires :issue_iid, type: Integer, desc: 'The internal ID of a project issue'
+      end
+      get ":id/issues/:issue_iid/user_agent_detail" do
+        authenticated_as_admin!
+
+        issue = find_project_issue(params[:issue_iid])
+
+        return not_found!('UserAgentDetail') unless issue.user_agent_detail
+
+        present issue.user_agent_detail, with: Entities::UserAgentDetail
       end
     end
   end

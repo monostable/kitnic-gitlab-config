@@ -15,12 +15,7 @@ class SessionsController < Devise::SessionsController
 
   def new
     set_minimum_password_length
-    @ldap_servers =
-      if Gitlab.config.ldap.enabled
-        Gitlab::LDAP::Config.servers
-      else
-        []
-      end
+    @ldap_servers = Gitlab::LDAP::Config.available_servers
 
     super
   end
@@ -47,6 +42,10 @@ class SessionsController < Devise::SessionsController
 
   private
 
+  def login_counter
+    @login_counter ||= Gitlab::Metrics.counter(:user_session_logins_total, 'User sign in count')
+  end
+
   # Handle an "initial setup" state, where there's only one user, it's an admin,
   # and they require a password change.
   def check_initial_setup
@@ -54,12 +53,13 @@ class SessionsController < Devise::SessionsController
 
     user = User.admins.last
 
-    return unless user && user.require_password?
+    return unless user && user.require_password_creation?
 
-    token = user.generate_reset_token
-    user.save
+    Users::UpdateService.new(user).execute do |user|
+      @token = user.generate_reset_token
+    end
 
-    redirect_to edit_user_password_path(reset_password_token: token),
+    redirect_to edit_user_password_path(reset_password_token: @token),
       notice: "Please create a password for your new account."
   end
 
@@ -90,7 +90,7 @@ class SessionsController < Devise::SessionsController
 
     # Prevent a 'you are already signed in' message directly after signing:
     # we should never redirect to '/users/sign_in' after signing in successfully.
-    unless redirect_path == new_user_session_path
+    unless URI(redirect_path).path == new_user_session_path
       store_location_for(:redirect, redirect_path)
     end
   end
@@ -102,6 +102,10 @@ class SessionsController < Devise::SessionsController
   def auto_sign_in_with_provider
     provider = Gitlab.config.omniauth.auto_sign_in_with_provider
     return unless provider.present?
+
+    # If a "auto_sign_in" query parameter is set to a falsy value, don't auto sign-in.
+    # Otherwise, the default is to auto sign-in.
+    return if Gitlab::Utils.to_boolean(params[:auto_sign_in]) == false
 
     # Auto sign in with an Omniauth provider only if the standard "you need to sign-in" alert is
     # registered or no alert at all. In case of another alert (such as a blocked user), it is safer
@@ -120,11 +124,12 @@ class SessionsController < Devise::SessionsController
   end
 
   def log_audit_event(user, options = {})
-    AuditEventService.new(user, user, options).
-      for_authentication.security_event
+    AuditEventService.new(user, user, options)
+      .for_authentication.security_event
   end
 
   def log_user_activity(user)
+    login_counter.increment
     Users::ActivityService.new(user, 'login').execute
   end
 

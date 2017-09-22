@@ -34,7 +34,10 @@ module API
           notification_setting.transaction do
             new_notification_email = params.delete(:notification_email)
 
-            current_user.update(notification_email: new_notification_email) if new_notification_email
+            if new_notification_email
+              ::Users::UpdateService.new(current_user, notification_email: new_notification_email).execute
+            end
+
             notification_setting.update(declared_params(include_missing: false))
           end
         rescue ArgumentError => e # catch level enum error
@@ -51,7 +54,7 @@ module API
       params do
         requires :id, type: String, desc: "The #{source_type} ID"
       end
-      resource source_type.pluralize, requirements: { id: %r{[^/]+} } do
+      resource source_type.pluralize, requirements: API::PROJECT_ENDPOINT_REQUIREMENTS do
         desc "Get #{source_type} level notification level settings, defaults to Global" do
           detail 'This feature was introduced in GitLab 8.12'
           success Entities::NotificationSetting

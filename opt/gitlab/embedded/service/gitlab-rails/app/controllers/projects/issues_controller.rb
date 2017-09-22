@@ -8,19 +8,15 @@ class Projects::IssuesController < Projects::ApplicationController
 
   prepend_before_action :authenticate_user!, only: [:new]
 
-  before_action :redirect_to_external_issue_tracker, only: [:index, :new]
-  before_action :module_enabled
-  before_action :issue, only: [:edit, :update, :show, :referenced_merge_requests,
-                               :related_branches, :can_create_branch, :rendered_title, :create_merge_request]
-
-  # Allow read any issue
-  before_action :authorize_read_issue!, only: [:show, :rendered_title]
+  before_action :check_issues_available!
+  before_action :issue, except: [:index, :new, :create, :bulk_update]
+  before_action :set_issues_index, only: [:index]
 
   # Allow write(create) issue
   before_action :authorize_create_issue!, only: [:new, :create]
 
   # Allow modify issue
-  before_action :authorize_update_issue!, only: [:edit, :update]
+  before_action :authorize_update_issue!, only: [:edit, :update, :move]
 
   # Allow create a new branch and empty WIP merge request from current issue
   before_action :authorize_create_merge_request!, only: [:create_merge_request]
@@ -28,21 +24,6 @@ class Projects::IssuesController < Projects::ApplicationController
   respond_to :html
 
   def index
-    @collection_type    = "Issue"
-    @issues             = issues_collection
-    @issues             = @issues.page(params[:page])
-    @issuable_meta_data = issuable_meta_data(@issues, @collection_type)
-
-    if @issues.out_of_range? && @issues.total_pages != 0
-      return redirect_to url_for(params.merge(page: @issues.total_pages, only_path: true))
-    end
-
-    if params[:label_name].present?
-      @labels = LabelsFinder.new(current_user, project_id: @project.id, title: params[:label_name]).execute
-    end
-
-    @users = []
-
     if params[:assignee_id].present?
       assignee = User.find_by_id(params[:assignee_id])
       @users.push(assignee) if assignee
@@ -55,7 +36,7 @@ class Projects::IssuesController < Projects::ApplicationController
 
     respond_to do |format|
       format.html
-      format.atom { render layout: false }
+      format.atom { render layout: 'xml.atom' }
       format.json do
         render json: {
           html: view_to_html_string("projects/issues/_issues"),
@@ -90,15 +71,26 @@ class Projects::IssuesController < Projects::ApplicationController
     @noteable = @issue
     @note     = @project.notes.new(noteable: @issue)
 
-    @discussions = @issue.discussions
-    @notes = prepare_notes_for_rendering(@discussions.flat_map(&:notes))
-
     respond_to do |format|
       format.html
       format.json do
-        render json: IssueSerializer.new.represent(@issue)
+        render json: serializer.represent(@issue)
       end
     end
+  end
+
+  def discussions
+    notes = @issue.notes
+      .inc_relations_for_view
+      .includes(:noteable)
+      .fresh
+
+    notes = prepare_notes_for_rendering(notes)
+    notes = notes.reject { |n| n.cross_reference_not_visible_for?(current_user) }
+
+    discussions = Discussion.build_collection(notes, @issue)
+
+    render json: DiscussionSerializer.new(project: @project, noteable: @issue, current_user: current_user).represent(discussions)
   end
 
   def create
@@ -133,28 +125,33 @@ class Projects::IssuesController < Projects::ApplicationController
 
     @issue = Issues::UpdateService.new(project, current_user, update_params).execute(issue)
 
-    if params[:move_to_project_id].to_i > 0
-      new_project = Project.find(params[:move_to_project_id])
-      return render_404 unless issue.can_move?(current_user, new_project)
-
-      move_service = Issues::MoveService.new(project, current_user)
-      @issue = move_service.execute(@issue, new_project)
-    end
-
     respond_to do |format|
       format.html do
         recaptcha_check_with_fallback { render :edit }
       end
 
       format.json do
-        if @issue.valid?
-          render json: @issue.to_json(methods: [:task_status, :task_status_short],
-                                      include: { milestone: {},
-                                                 assignees: { only: [:id, :name, :username], methods: [:avatar_url] },
-                                                 labels: { methods: :text_color } })
-        else
-          render json: { errors: @issue.errors.full_messages }, status: :unprocessable_entity
-        end
+        render_issue_json
+      end
+    end
+
+  rescue ActiveRecord::StaleObjectError
+    render_conflict_response
+  end
+
+  def move
+    params.require(:move_to_project_id)
+
+    if params[:move_to_project_id].to_i > 0
+      new_project = Project.find(params[:move_to_project_id])
+      return render_404 unless issue.can_move?(current_user, new_project)
+
+      @issue = Issues::UpdateService.new(project, current_user, target_project: new_project).execute(issue)
+    end
+
+    respond_to do |format|
+      format.json do
+        render_issue_json
       end
     end
 
@@ -199,7 +196,7 @@ class Projects::IssuesController < Projects::ApplicationController
     end
   end
 
-  def rendered_title
+  def realtime_changes
     Gitlab::PollingInterval.set_header(response, interval: 3_000)
 
     response = {
@@ -207,11 +204,10 @@ class Projects::IssuesController < Projects::ApplicationController
       title_text: @issue.title,
       description: view_context.markdown_field(@issue, :description),
       description_text: @issue.description,
-      task_status: @issue.task_status,
-      issue_number: @issue.iid,
+      task_status: @issue.task_status
     }
 
-    if @issue.is_edited?
+    if @issue.edited?
       response[:updated_at] = @issue.updated_at
       response[:updated_by_name] = @issue.last_edited_by.name
       response[:updated_by_path] = user_path(@issue.last_edited_by)
@@ -221,7 +217,7 @@ class Projects::IssuesController < Projects::ApplicationController
   end
 
   def create_merge_request
-    result = MergeRequests::CreateFromIssueService.new(project, current_user, issue_iid: issue.iid).execute
+    result = ::MergeRequests::CreateFromIssueService.new(project, current_user, issue_iid: issue.iid).execute
 
     if result[:status] == :success
       render json: MergeRequestCreateSerializer.new.represent(result[:merge_request])
@@ -233,66 +229,64 @@ class Projects::IssuesController < Projects::ApplicationController
   protected
 
   def issue
+    return @issue if defined?(@issue)
     # The Sortable default scope causes performance issues when used with find_by
-    @noteable = @issue ||= @project.issues.where(iid: params[:id]).reorder(nil).take || redirect_old
+    @noteable = @issue ||= @project.issues.where(iid: params[:id]).reorder(nil).take!
+
+    return render_404 unless can?(current_user, :read_issue, @issue)
+
+    @issue
   end
   alias_method :subscribable_resource, :issue
   alias_method :issuable, :issue
   alias_method :awardable, :issue
   alias_method :spammable, :issue
 
-  def authorize_read_issue!
-    return render_404 unless can?(current_user, :read_issue, @issue)
+  def spammable_path
+    project_issue_path(@project, @issue)
   end
 
   def authorize_update_issue!
-    return render_404 unless can?(current_user, :update_issue, @issue)
+    render_404 unless can?(current_user, :update_issue, @issue)
   end
 
   def authorize_admin_issues!
-    return render_404 unless can?(current_user, :admin_issue, @project)
+    render_404 unless can?(current_user, :admin_issue, @project)
   end
 
   def authorize_create_merge_request!
-    return render_404 unless can?(current_user, :push_code, @project) && @issue.can_be_worked_on?(current_user)
+    render_404 unless can?(current_user, :push_code, @project) && @issue.can_be_worked_on?(current_user)
   end
 
-  def module_enabled
-    return render_404 unless @project.feature_available?(:issues, current_user) && @project.default_issues_tracker?
+  def check_issues_available!
+    return render_404 unless @project.feature_available?(:issues, current_user)
   end
 
-  def redirect_to_external_issue_tracker
-    external = @project.external_issue_tracker
-
-    return unless external
-
-    if action_name == 'new'
-      redirect_to external.new_issue_path
+  def render_issue_json
+    if @issue.valid?
+      render json: serializer.represent(@issue)
     else
-      redirect_to external.project_path
-    end
-  end
-
-  # Since iids are implemented only in 6.1
-  # user may navigate to issue page using old global ids.
-  #
-  # To prevent 404 errors we provide a redirect to correct iids until 7.0 release
-  #
-  def redirect_old
-    issue = @project.issues.find_by(id: params[:id])
-
-    if issue
-      redirect_to issue_path(issue)
-    else
-      raise ActiveRecord::RecordNotFound.new
+      render json: { errors: @issue.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
   def issue_params
-    params.require(:issue).permit(
-      :title, :assignee_id, :position, :description, :confidential,
-      :milestone_id, :due_date, :state_event, :task_num, :lock_version, label_ids: [], assignee_ids: [],
-    )
+    params.require(:issue).permit(*issue_params_attributes)
+  end
+
+  def issue_params_attributes
+    %i[
+      title
+      assignee_id
+      position
+      description
+      confidential
+      milestone_id
+      due_date
+      state_event
+      task_num
+      lock_version
+    ] + [{ label_ids: [], assignee_ids: [] }]
   end
 
   def authenticate_user!
@@ -300,7 +294,14 @@ class Projects::IssuesController < Projects::ApplicationController
 
     notice = "Please sign in to create the new issue."
 
-    store_location_for :user, request.fullpath
+    if request.get? && !request.xhr?
+      store_location_for :user, request.fullpath
+    end
+
     redirect_to new_user_session_path, notice: notice
+  end
+
+  def serializer
+    IssueSerializer.new(current_user: current_user, project: issue.project)
   end
 end

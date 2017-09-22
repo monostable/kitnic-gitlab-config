@@ -1,11 +1,20 @@
 class OmniauthCallbacksController < Devise::OmniauthCallbacksController
   include AuthenticatesWithTwoFactor
+  include Devise::Controllers::Rememberable
 
   protect_from_forgery except: [:kerberos, :saml, :cas3]
 
   Gitlab.config.omniauth.providers.each do |provider|
     define_method provider['name'] do
       handle_omniauth
+    end
+  end
+
+  if Gitlab::LDAP::Config.enabled?
+    Gitlab::LDAP::Config.available_servers.each do |server|
+      define_method server['provider_name'] do
+        ldap
+      end
     end
   end
 
@@ -33,12 +42,11 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
       if @user.two_factor_enabled?
         prompt_for_two_factor(@user)
       else
-        log_audit_event(@user, with: :ldap)
+        log_audit_event(@user, with: oauth['provider'])
         sign_in_and_redirect(@user)
       end
     else
-      flash[:alert] = "Access denied for your LDAP account."
-      redirect_to new_user_session_path
+      fail_ldap_login
     end
   end
 
@@ -115,14 +123,14 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
     if @user.persisted? && @user.valid?
       log_audit_event(@user, with: oauth['provider'])
       if @user.two_factor_enabled?
+        params[:remember_me] = '1' if remember_me?
         prompt_for_two_factor(@user)
       else
+        remember_me(@user) if remember_me?
         sign_in_and_redirect(@user)
       end
     else
-      error_message = @user.errors.full_messages.to_sentence
-
-      return redirect_to omniauth_error_path(oauth['provider'], error: error_message)
+      fail_login
     end
   end
 
@@ -143,8 +151,25 @@ class OmniauthCallbacksController < Devise::OmniauthCallbacksController
     @oauth ||= request.env['omniauth.auth']
   end
 
+  def fail_login
+    error_message = @user.errors.full_messages.to_sentence
+
+    return redirect_to omniauth_error_path(oauth['provider'], error: error_message)
+  end
+
+  def fail_ldap_login
+    flash[:alert] = 'Access denied for your LDAP account.'
+
+    redirect_to new_user_session_path
+  end
+
   def log_audit_event(user, options = {})
-    AuditEventService.new(user, user, options).
-      for_authentication.security_event
+    AuditEventService.new(user, user, options)
+      .for_authentication.security_event
+  end
+
+  def remember_me?
+    request_params = request.env['omniauth.params']
+    (request_params['remember_me'] == '1') if request_params.present?
   end
 end

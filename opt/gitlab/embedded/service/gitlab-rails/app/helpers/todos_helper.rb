@@ -4,7 +4,7 @@ module TodosHelper
   end
 
   def todos_count_format(count)
-    count > 99 ? '99+' : count
+    count > 99 ? '99+' : count.to_s
   end
 
   def todos_done_count
@@ -24,10 +24,13 @@ module TodosHelper
   end
 
   def todo_target_link(todo)
-    target = todo.target_type.titleize.downcase
-    link_to "#{target} #{todo.target_reference}", todo_target_path(todo),
-      class: 'has-tooltip',
-      title: todo.target.title
+    text = raw("#{todo.target_type.titleize.downcase} ") +
+      if todo.for_commit?
+        content_tag(:span, todo.target_reference, class: 'commit-sha')
+      else
+        todo.target_reference
+      end
+    link_to text, todo_target_path(todo), class: 'has-tooltip', title: todo.target.title
   end
 
   def todo_target_path(todo)
@@ -36,7 +39,7 @@ module TodosHelper
     anchor = dom_id(todo.note) if todo.note.present?
 
     if todo.for_commit?
-      namespace_project_commit_path(todo.project.namespace.becomes(Namespace), todo.project,
+      project_commit_path(todo.project,
                                     todo.target, anchor: anchor)
     else
       path = [todo.project.namespace.becomes(Namespace), todo.project, todo.target]
@@ -63,7 +66,7 @@ module TodosHelper
       project_id: params[:project_id],
       author_id:  params[:author_id],
       type:       params[:type],
-      action_id:  params[:action_id],
+      action_id:  params[:action_id]
     }
   end
 

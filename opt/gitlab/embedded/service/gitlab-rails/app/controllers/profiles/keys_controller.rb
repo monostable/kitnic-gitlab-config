@@ -2,7 +2,7 @@ class Profiles::KeysController < Profiles::ApplicationController
   skip_before_action :authenticate_user!, only: [:get_keys]
 
   def index
-    @keys = current_user.keys
+    @keys = current_user.keys.order_id_desc
     @key = Key.new
   end
 
@@ -26,7 +26,7 @@ class Profiles::KeysController < Profiles::ApplicationController
     @key.destroy
 
     respond_to do |format|
-      format.html { redirect_to profile_keys_url }
+      format.html { redirect_to profile_keys_url, status: 302 }
       format.js { head :ok }
     end
   end

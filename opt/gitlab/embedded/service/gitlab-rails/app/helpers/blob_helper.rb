@@ -9,7 +9,7 @@ module BlobHelper
   end
 
   def edit_path(project = @project, ref = @ref, path = @path, options = {})
-    namespace_project_edit_blob_path(project.namespace, project,
+    project_edit_blob_path(project,
                                      tree_join(ref, path),
                                      options[:link_opts])
   end
@@ -18,7 +18,7 @@ module BlobHelper
     blob = options.delete(:blob)
     blob ||= project.repository.blob_at(ref, path) rescue nil
 
-    return unless blob
+    return unless blob && blob.readable_text?
 
     common_classes = "btn js-edit-blob #{options[:extra_class]}"
 
@@ -33,7 +33,7 @@ module BlobHelper
         notice: edit_in_new_fork_notice,
         notice_now: edit_in_new_fork_notice_now
       }
-      fork_path = namespace_project_forks_path(project.namespace, project, namespace_key: current_user.namespace.id, continue: continue_params)
+      fork_path = project_forks_path(project, namespace_key: current_user.namespace.id, continue: continue_params)
 
       button_tag 'Edit',
         class: "#{common_classes} js-edit-blob-link-fork-toggler",
@@ -62,7 +62,7 @@ module BlobHelper
         notice: edit_in_new_fork_notice + " Try to #{action} this file again.",
         notice_now: edit_in_new_fork_notice_now
       }
-      fork_path = namespace_project_forks_path(project.namespace, project, namespace_key: current_user.namespace.id, continue: continue_params)
+      fork_path = project_forks_path(project, namespace_key: current_user.namespace.id, continue: continue_params)
 
       button_tag label,
         class: "#{common_classes} js-edit-blob-link-fork-toggler",
@@ -118,17 +118,17 @@ module BlobHelper
     icon("#{file_type_icon_class('file', mode, name)} fw")
   end
 
-  def blob_raw_url
+  def blob_raw_path
     if @build && @entry
-      raw_namespace_project_build_artifacts_path(@project.namespace, @project, @build, path: @entry.path)
+      raw_project_job_artifacts_path(@project, @build, path: @entry.path)
     elsif @snippet
       if @snippet.project_id
-        raw_namespace_project_snippet_path(@project.namespace, @project, @snippet)
+        raw_project_snippet_path(@project, @snippet)
       else
         raw_snippet_path(@snippet)
       end
     elsif @blob
-      namespace_project_raw_path(@project.namespace, @project, @id)
+      project_raw_path(@project, @id)
     end
   end
 
@@ -226,7 +226,7 @@ module BlobHelper
 
   def open_raw_blob_button(blob)
     return if blob.empty?
-    
+
     if blob.raw_binary? || blob.stored_externally?
       icon = icon('download')
       title = 'Download'
@@ -235,19 +235,15 @@ module BlobHelper
       title = 'Open raw'
     end
 
-    link_to icon, blob_raw_url, class: 'btn btn-sm has-tooltip', target: '_blank', rel: 'noopener noreferrer', title: title, data: { container: 'body' }
+    link_to icon, blob_raw_path, class: 'btn btn-sm has-tooltip', target: '_blank', rel: 'noopener noreferrer', title: title, data: { container: 'body' }
   end
 
   def blob_render_error_reason(viewer)
     case viewer.render_error
+    when :collapsed
+      "it is larger than #{number_to_human_size(viewer.collapse_limit)}"
     when :too_large
-      max_size =
-        if viewer.absolutely_too_large?
-          viewer.absolute_max_size
-        elsif viewer.too_large?
-          viewer.max_size
-        end
-      "it is larger than #{number_to_human_size(max_size)}"
+      "it is larger than #{number_to_human_size(viewer.size_limit)}"
     when :server_side_but_stored_externally
       case viewer.blob.external_storage
       when :lfs
@@ -264,8 +260,8 @@ module BlobHelper
     error = viewer.render_error
     options = []
 
-    if error == :too_large && viewer.can_override_max_size?
-      options << link_to('load it anyway', url_for(params.merge(viewer: viewer.type, override_max_size: true, format: nil)))
+    if error == :collapsed
+      options << link_to('load it anyway', url_for(params.merge(viewer: viewer.type, expanded: true, format: nil)))
     end
 
     # If the error is `:server_side_but_stored_externally`, the simple viewer will show the same error,
@@ -274,7 +270,22 @@ module BlobHelper
       options << link_to('view the source', '#', class: 'js-blob-viewer-switch-btn', data: { viewer: 'simple' })
     end
 
-    options << link_to('download it', blob_raw_url, target: '_blank', rel: 'noopener noreferrer')
+    options << link_to('download it', blob_raw_path, target: '_blank', rel: 'noopener noreferrer')
+
+    options
+  end
+
+  def contribution_options(project)
+    options = []
+
+    if can?(current_user, :create_issue, project)
+      options << link_to("submit an issue", new_project_issue_path(project))
+    end
+
+    merge_project = can?(current_user, :create_merge_request, project) ? project : (current_user && current_user.fork_of(project))
+    if merge_project
+      options << link_to("create a merge request", project_new_merge_request_path(project))
+    end
 
     options
   end

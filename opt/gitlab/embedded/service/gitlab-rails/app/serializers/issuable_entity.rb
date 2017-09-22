@@ -5,7 +5,6 @@ class IssuableEntity < Grape::Entity
   expose :description
   expose :lock_version
   expose :milestone_id
-  expose :position
   expose :state
   expose :title
   expose :updated_by_id
@@ -16,4 +15,6 @@ class IssuableEntity < Grape::Entity
   expose :total_time_spent
   expose :human_time_estimate
   expose :human_total_time_spent
+  expose :milestone, using: API::Entities::Milestone
+  expose :labels, using: LabelEntity
 end

@@ -10,11 +10,20 @@ module IssuableActions
   def destroy
     issuable.destroy
     destroy_method = "destroy_#{issuable.class.name.underscore}".to_sym
-    TodoService.new.public_send(destroy_method, issuable, current_user)
+    TodoService.new.public_send(destroy_method, issuable, current_user) # rubocop:disable GitlabSecurity/PublicSend
 
     name = issuable.human_class_name
     flash[:notice] = "The #{name} was successfully deleted."
-    redirect_to polymorphic_path([@project.namespace.becomes(Namespace), @project, issuable.class])
+    index_path = polymorphic_path([@project.namespace.becomes(Namespace), @project, issuable.class])
+
+    respond_to do |format|
+      format.html { redirect_to index_path }
+      format.json do
+        render json: {
+          web_url: index_path
+        }
+      end
+    end
   end
 
   def bulk_update

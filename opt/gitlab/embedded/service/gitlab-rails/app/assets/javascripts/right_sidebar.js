@@ -1,14 +1,14 @@
 /* eslint-disable func-names, space-before-function-paren, no-var, prefer-rest-params, wrap-iife, no-unused-vars, consistent-return, one-var, one-var-declaration-per-line, quotes, prefer-template, object-shorthand, comma-dangle, no-else-return, no-param-reassign, max-len */
 
+import _ from 'underscore';
 import Cookies from 'js-cookie';
 
 (function() {
-  var bind = function(fn, me) { return function() { return fn.apply(me, arguments); }; };
-
   this.Sidebar = (function() {
     function Sidebar(currentUser) {
-      this.toggleTodo = bind(this.toggleTodo, this);
+      this.toggleTodo = this.toggleTodo.bind(this);
       this.sidebar = $('aside');
+
       this.removeListeners();
       this.addEventListeners();
     }
@@ -23,14 +23,12 @@ import Cookies from 'js-cookie';
 
     Sidebar.prototype.addEventListeners = function() {
       const $document = $(document);
-      const throttledSetSidebarHeight = _.throttle(this.setSidebarHeight, 10);
 
       this.sidebar.on('click', '.sidebar-collapsed-icon', this, this.sidebarCollapseClicked);
       $('.dropdown').on('hidden.gl.dropdown', this, this.onSidebarDropdownHidden);
       $('.dropdown').on('loading.gl.dropdown', this.sidebarDropdownLoading);
       $('.dropdown').on('loaded.gl.dropdown', this.sidebarDropdownLoaded);
-      $(window).on('resize', () => throttledSetSidebarHeight());
-      $document.on('scroll', () => throttledSetSidebarHeight());
+
       $document.on('click', '.js-sidebar-toggle', function(e, triggered) {
         var $allGutterToggleIcons, $this, $thisIcon;
         e.preventDefault();
@@ -157,11 +155,16 @@ import Cookies from 'js-cookie';
     Sidebar.prototype.openDropdown = function(blockOrName) {
       var $block;
       $block = _.isString(blockOrName) ? this.getBlock(blockOrName) : blockOrName;
-      $block.find('.edit-link').trigger('click');
       if (!this.isOpen()) {
         this.setCollapseAfterUpdate($block);
-        return this.toggleSidebar('open');
+        this.toggleSidebar('open');
       }
+
+      // Wait for the sidebar to trigger('click') open
+      // so it doesn't cause our dropdown to close preemptively
+      setTimeout(() => {
+        $block.find('.js-sidebar-dropdown-toggle').trigger('click');
+      });
     };
 
     Sidebar.prototype.setCollapseAfterUpdate = function($block) {
@@ -205,17 +208,6 @@ import Cookies from 'js-cookie';
         if (this.isOpen()) {
           return this.triggerOpenSidebar();
         }
-      }
-    };
-
-    Sidebar.prototype.setSidebarHeight = function() {
-      const $navHeight = $('.navbar-gitlab').outerHeight() + $('.layout-nav').outerHeight() + $('.sub-nav-scroll').outerHeight();
-      const $rightSidebar = $('.js-right-sidebar');
-      const diff = $navHeight - $(window).scrollTop();
-      if (diff > 0) {
-        $rightSidebar.outerHeight($(window).height() - diff);
-      } else {
-        $rightSidebar.outerHeight('100%');
       }
     };
 

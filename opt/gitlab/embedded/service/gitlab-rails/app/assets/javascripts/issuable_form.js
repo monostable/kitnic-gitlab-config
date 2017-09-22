@@ -1,32 +1,29 @@
 /* eslint-disable func-names, space-before-function-paren, no-var, prefer-rest-params, wrap-iife, no-use-before-define, no-useless-escape, no-new, quotes, object-shorthand, no-unused-vars, comma-dangle, no-alert, consistent-return, no-else-return, prefer-template, one-var, one-var-declaration-per-line, curly, max-len */
 /* global GitLab */
-/* global UsersSelect */
-/* global ZenMode */
 /* global Autosave */
 /* global dateFormat */
-/* global Pikaday */
+
+import Pikaday from 'pikaday';
+import UsersSelect from './users_select';
+import GfmAutoComplete from './gfm_auto_complete';
+import ZenMode from './zen_mode';
 
 (function() {
-  var bind = function(fn, me) { return function() { return fn.apply(me, arguments); }; };
-
   this.IssuableForm = (function() {
-    IssuableForm.prototype.issueMoveConfirmMsg = 'Are you sure you want to move this issue to another project?';
-
     IssuableForm.prototype.wipRegex = /^\s*(\[WIP\]\s*|WIP:\s*|WIP\s+)+\s*/i;
 
     function IssuableForm(form) {
       var $issuableDueDate, calendar;
       this.form = form;
-      this.toggleWip = bind(this.toggleWip, this);
-      this.renderWipExplanation = bind(this.renderWipExplanation, this);
-      this.resetAutosave = bind(this.resetAutosave, this);
-      this.handleSubmit = bind(this.handleSubmit, this);
-      gl.GfmAutoComplete.setup();
+      this.toggleWip = this.toggleWip.bind(this);
+      this.renderWipExplanation = this.renderWipExplanation.bind(this);
+      this.resetAutosave = this.resetAutosave.bind(this);
+      this.handleSubmit = this.handleSubmit.bind(this);
+      new GfmAutoComplete(gl.GfmAutoComplete && gl.GfmAutoComplete.dataSources).setup();
       new UsersSelect();
       new ZenMode();
       this.titleField = this.form.find("input[name*='[title]']");
       this.descriptionField = this.form.find("textarea[name*='[description]']");
-      this.issueMoveField = this.form.find("#move_to_project_id");
       if (!(this.titleField.length && this.descriptionField.length)) {
         return;
       }
@@ -34,7 +31,6 @@
       this.form.on("submit", this.handleSubmit);
       this.form.on("click", ".btn-cancel", this.resetAutosave);
       this.initWip();
-      this.initMoveDropdown();
       $issuableDueDate = $('#issuable-due-date');
       if ($issuableDueDate.length) {
         calendar = new Pikaday({
@@ -56,12 +52,6 @@
     };
 
     IssuableForm.prototype.handleSubmit = function() {
-      var fieldId = (this.issueMoveField != null) ? this.issueMoveField.val() : null;
-      if ((parseInt(fieldId, 10) || 0) > 0) {
-        if (!confirm(this.issueMoveConfirmMsg)) {
-          return false;
-        }
-      }
       return this.resetAutosave();
     };
 
@@ -111,48 +101,6 @@
 
     IssuableForm.prototype.addWip = function() {
       return this.titleField.val("WIP: " + (this.titleField.val()));
-    };
-
-    IssuableForm.prototype.initMoveDropdown = function() {
-      var $moveDropdown, pageSize;
-      $moveDropdown = $('.js-move-dropdown');
-      if ($moveDropdown.length) {
-        pageSize = $moveDropdown.data('page-size');
-        return $('.js-move-dropdown').select2({
-          ajax: {
-            url: $moveDropdown.data('projects-url'),
-            quietMillis: 125,
-            data: function(term, page, context) {
-              return {
-                search: term,
-                offset_id: context
-              };
-            },
-            results: function(data) {
-              var context,
-                more;
-
-              if (data.length >= pageSize)
-                more = true;
-
-              if (data[data.length - 1])
-                context = data[data.length - 1].id;
-
-              return {
-                results: data,
-                more: more,
-                context: context
-              };
-            }
-          },
-          formatResult: function(project) {
-            return project.name_with_namespace;
-          },
-          formatSelection: function(project) {
-            return project.name_with_namespace;
-          }
-        });
-      }
     };
 
     return IssuableForm;

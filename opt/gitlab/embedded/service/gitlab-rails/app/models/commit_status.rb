@@ -5,20 +5,20 @@ class CommitStatus < ActiveRecord::Base
 
   self.table_name = 'ci_builds'
 
+  belongs_to :user
   belongs_to :project
   belongs_to :pipeline, class_name: 'Ci::Pipeline', foreign_key: :commit_id
   belongs_to :auto_canceled_by, class_name: 'Ci::Pipeline'
-  belongs_to :user
 
   delegate :commit, to: :pipeline
   delegate :sha, :short_sha, to: :pipeline
 
   validates :pipeline, presence: true, unless: :importing?
 
-  validates :name, presence: true
+  validates :name, presence: true, unless: :importing?
 
   alias_attribute :author, :user
-  
+
   scope :failed_but_allowed, -> do
     where(allow_failure: true, status: [:failed, :canceled])
   end
@@ -38,13 +38,21 @@ class CommitStatus < ActiveRecord::Base
   scope :retried_ordered, -> { retried.ordered.includes(project: :namespace) }
   scope :after_stage, -> (index) { where('stage_idx > ?', index) }
 
-  state_machine :status do
-    event :enqueue do
-      transition [:created, :skipped, :manual] => :pending
-    end
+  enum failure_reason: {
+    unknown_failure: nil,
+    script_failure: 1,
+    api_failure: 2,
+    stuck_or_timeout_failure: 3,
+    runner_system_failure: 4
+  }
 
+  state_machine :status do
     event :process do
       transition [:skipped, :manual] => :created
+    end
+
+    event :enqueue do
+      transition [:created, :skipped, :manual] => :pending
     end
 
     event :run do
@@ -79,18 +87,25 @@ class CommitStatus < ActiveRecord::Base
       commit_status.finished_at = Time.now
     end
 
+    before_transition any => :failed do |commit_status, transition|
+      failure_reason = transition.args.first
+      commit_status.failure_reason = failure_reason
+    end
+
     after_transition do |commit_status, transition|
       next if transition.loopback?
 
       commit_status.run_after_commit do
-        pipeline.try do |pipeline|
+        if pipeline
           if complete? || manual?
             PipelineProcessWorker.perform_async(pipeline.id)
           else
             PipelineUpdateWorker.perform_async(pipeline.id)
           end
-          ExpireJobCacheWorker.perform_async(commit_status.id)
         end
+
+        StageUpdateWorker.perform_async(commit_status.stage_id)
+        ExpireJobCacheWorker.perform_async(commit_status.id)
       end
     end
 
@@ -111,7 +126,7 @@ class CommitStatus < ActiveRecord::Base
   end
 
   def group_name
-    name.gsub(/\d+[\s:\/\\]+\d+\s*/, '').strip
+    name.to_s.gsub(/\d+[\s:\/\\]+\d+\s*/, '').strip
   end
 
   def failed_but_allowed?
@@ -123,6 +138,16 @@ class CommitStatus < ActiveRecord::Base
   end
 
   def playable?
+    false
+  end
+
+  # To be overriden when inherrited from
+  def retryable?
+    false
+  end
+
+  # To be overriden when inherrited from
+  def cancelable?
     false
   end
 
@@ -145,7 +170,7 @@ class CommitStatus < ActiveRecord::Base
   end
 
   def sortable_name
-    name.split(/(\d+)/).map do |v|
+    name.to_s.split(/(\d+)/).map do |v|
       v =~ /\d+/ ? v.to_i : v
     end
   end

@@ -3,6 +3,7 @@ module Gitlab
     class RelationFactory
       OVERRIDES = { snippets: :project_snippets,
                     pipelines: 'Ci::Pipeline',
+                    stages: 'Ci::Stage',
                     statuses: 'commit_status',
                     triggers: 'Ci::Trigger',
                     pipeline_schedules: 'Ci::PipelineSchedule',
@@ -13,6 +14,7 @@ module Gitlab
                     create_access_levels: 'ProtectedTag::CreateAccessLevel',
                     labels: :project_labels,
                     priorities: :label_priorities,
+                    auto_devops: :project_auto_devops,
                     label: :project_label }.freeze
 
       USER_REFERENCES = %w[author_id assignee_id updated_by_id user_id created_by_id last_edited_by_id merge_user_id resolved_by_id].freeze
@@ -68,8 +70,8 @@ module Gitlab
         reset_tokens!
         remove_encrypted_attributes!
 
-        @relation_hash['data'].deep_symbolize_keys! if @relation_name == :events && @relation_hash['data']
         set_st_diff_commits if @relation_name == :merge_request_diff
+        set_diff if @relation_name == :merge_request_diff_files
       end
 
       def update_user_references
@@ -199,6 +201,10 @@ module Gitlab
 
         HashUtil.deep_symbolize_array!(@relation_hash['st_diffs'])
         HashUtil.deep_symbolize_array_with_date!(@relation_hash['st_commits'])
+      end
+
+      def set_diff
+        @relation_hash['diff'] = @relation_hash.delete('utf8_diff')
       end
 
       def existing_or_new_object

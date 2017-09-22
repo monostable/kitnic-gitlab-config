@@ -11,14 +11,18 @@
 #     group_id: integer
 #     project_id: integer
 #     milestone_title: string
+#     author_id: integer
 #     assignee_id: integer
 #     search: string
 #     label_name: string
 #     sort: string
 #     non_archived: boolean
 #     iids: integer[]
+#     my_reaction_emoji: string
 #
 class IssuableFinder
+  include CreatedAtFilter
+
   NONE = '0'.freeze
 
   attr_accessor :current_user, :params
@@ -31,6 +35,7 @@ class IssuableFinder
   def execute
     items = init_collection
     items = by_scope(items)
+    items = by_created_at(items)
     items = by_state(items)
     items = by_group(items)
     items = by_search(items)
@@ -41,6 +46,7 @@ class IssuableFinder
     items = by_iids(items)
     items = by_milestone(items)
     items = by_label(items)
+    items = by_my_reaction_emoji(items)
 
     # Filtering by project HAS TO be the last because we use the project IDs yielded by the issuable query thus far
     items = by_project(items)
@@ -53,6 +59,10 @@ class IssuableFinder
 
   def find_by(*params)
     execute.find_by(*params)
+  end
+
+  def row_count
+    Gitlab::IssuablesCountForState.new(self).for_state_or_opened(params[:state])
   end
 
   # We often get counts for each state by running a query per state, and
@@ -76,7 +86,6 @@ class IssuableFinder
     end
 
     counts[:all] = counts.values.sum
-    counts[:opened] += counts[:reopened]
 
     counts
   end
@@ -141,9 +150,17 @@ class IssuableFinder
 
     @milestones =
       if milestones?
-        scope = Milestone.where(project_id: projects)
+        if project?
+          group_id = project.group&.id
+          project_id = project.id
+        end
 
-        scope.where(title: params[:milestone_title])
+        group_id = group.id if group
+
+        search_params =
+          { title: params[:milestone_title], project_ids: project_id, group_ids: group_id }
+
+        MilestonesFinder.new(search_params).execute
       else
         Milestone.none
       end
@@ -325,11 +342,6 @@ class IssuableFinder
         items = items.left_joins_milestones.where('milestones.start_date <= NOW()')
       else
         items = items.with_milestone(params[:milestone_title])
-        items_projects = projects(items)
-
-        if items_projects
-          items = items.where(milestones: { project_id: items_projects })
-        end
       end
     end
 
@@ -349,6 +361,14 @@ class IssuableFinder
           items = items.where(labels: { id: label_ids })
         end
       end
+    end
+
+    items
+  end
+
+  def by_my_reaction_emoji(items)
+    if params[:my_reaction_emoji].present? && current_user
+      items = items.awarded(current_user, params[:my_reaction_emoji])
     end
 
     items

@@ -3,6 +3,7 @@
   color: $gl-text-color;
   border: 1px solid $border-color;
   border-radius: $border-radius-default;
+  margin-bottom: $gl-padding;
 
   .well-segment {
     padding: $gl-padding;
@@ -12,10 +13,19 @@
     }
 
     &.branch-info {
-      .monospace,
+      .commit-sha,
       .commit-info {
         margin-left: 4px;
       }
+
+      .ref-name {
+        font-size: 12px;
+      }
+    }
+
+    &.admin-well h4 {
+      border-bottom: 1px solid $border-color;
+      padding-bottom: 8px;
     }
   }
 
@@ -49,9 +59,17 @@
   padding: 15px;
 }
 
+.dark-well {
+  background-color: $gray-normal;
+
+  .btn {
+    width: 100%;
+  }
+}
+
 .well-centered {
   h1 {
-    font-weight: normal;
+    font-weight: $gl-font-weight-normal;
     text-align: center;
     font-size: 48px;
   }

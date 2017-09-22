@@ -45,7 +45,10 @@ module API
       end
       delete '/' do
         authenticate_runner!
-        Ci::Runner.find_by_token(params[:token]).destroy
+
+        runner = Ci::Runner.find_by_token(params[:token])
+
+        destroy_conditionally!(runner)
       end
 
       desc 'Validates authentication credentials' do
@@ -77,7 +80,7 @@ module API
         no_content! unless current_runner.active?
         update_runner_info
 
-        if current_runner.is_runner_queue_value_latest?(params[:last_update])
+        if current_runner.runner_queue_value_latest?(params[:last_update])
           header 'X-GitLab-Last-Update', params[:last_update]
           Gitlab::Metrics.add_event(:build_not_found_cached)
           return no_content!
@@ -89,7 +92,7 @@ module API
         if result.valid?
           if result.build
             Gitlab::Metrics.add_event(:build_found,
-                                      project: result.build.project.path_with_namespace)
+                                      project: result.build.project.full_path)
             present result.build, with: Entities::JobRequest::Response
           else
             Gitlab::Metrics.add_event(:build_not_found)
@@ -111,6 +114,8 @@ module API
         requires :id, type: Integer, desc: %q(Job's ID)
         optional :trace, type: String, desc: %q(Job's full trace)
         optional :state, type: String, desc: %q(Job's status: success, failed)
+        optional :failure_reason, type: String, values: CommitStatus.failure_reasons.keys,
+                                  desc: %q(Job's failure_reason)
       end
       put '/:id' do
         job = authenticate_job!
@@ -118,13 +123,13 @@ module API
         job.trace.set(params[:trace]) if params[:trace]
 
         Gitlab::Metrics.add_event(:update_build,
-                                  project: job.project.path_with_namespace)
+                                  project: job.project.full_path)
 
         case params[:state].to_s
         when 'success'
           job.success
         when 'failed'
-          job.drop
+          job.drop(params[:failure_reason] || :unknown_failure)
         end
       end
 
@@ -141,7 +146,7 @@ module API
       patch '/:id/trace' do
         job = authenticate_job!
 
-        error!('400 Missing header Content-Range', 400) unless request.headers.has_key?('Content-Range')
+        error!('400 Missing header Content-Range', 400) unless request.headers.key?('Content-Range')
         content_range = request.headers['Content-Range']
         content_range = content_range.split('-')
 
@@ -241,16 +246,7 @@ module API
       get '/:id/artifacts' do
         job = authenticate_job!
 
-        artifacts_file = job.artifacts_file
-        unless artifacts_file.file_storage?
-          return redirect_to job.artifacts_file.url
-        end
-
-        unless artifacts_file.exists?
-          not_found!
-        end
-
-        present_file!(artifacts_file.path, artifacts_file.filename)
+        present_artifacts!(job.artifacts_file)
       end
     end
   end

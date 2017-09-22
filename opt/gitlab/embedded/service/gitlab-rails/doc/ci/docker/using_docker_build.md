@@ -37,7 +37,7 @@ GitLab Runner then executes job scripts as the `gitlab-runner` user.
 
     ```bash
     sudo gitlab-ci-multi-runner register -n \
-      --url https://gitlab.com/ci \
+      --url https://gitlab.com/ \
       --registration-token REGISTRATION_TOKEN \
       --executor shell \
       --description "My Runner"
@@ -94,7 +94,7 @@ In order to do that, follow the steps:
 
     ```bash
     sudo gitlab-ci-multi-runner register -n \
-      --url https://gitlab.com/ci \
+      --url https://gitlab.com/ \
       --registration-token REGISTRATION_TOKEN \
       --executor docker \
       --description "My Docker Runner" \
@@ -112,7 +112,7 @@ In order to do that, follow the steps:
 
     ```
     [[runners]]
-      url = "https://gitlab.com/ci"
+      url = "https://gitlab.com/"
       token = TOKEN
       executor = "docker"
       [runners.docker]
@@ -134,7 +134,7 @@ In order to do that, follow the steps:
     # When using dind, it's wise to use the overlayfs driver for
     # improved performance.
     variables:
-      DOCKER_DRIVER: overlay
+      DOCKER_DRIVER: overlay2
 
     services:
     - docker:dind
@@ -179,7 +179,7 @@ In order to do that, follow the steps:
 
     ```bash
     sudo gitlab-ci-multi-runner register -n \
-      --url https://gitlab.com/ci \
+      --url https://gitlab.com/ \
       --registration-token REGISTRATION_TOKEN \
       --executor docker \
       --description "My Docker Runner" \
@@ -197,7 +197,7 @@ In order to do that, follow the steps:
 
     ```
     [[runners]]
-      url = "https://gitlab.com/ci"
+      url = "https://gitlab.com/"
       token = REGISTRATION_TOKEN
       executor = "docker"
       [runners.docker]
@@ -248,7 +248,7 @@ aware of the following implications:
 
 By default, when using `docker:dind`, Docker uses the `vfs` storage driver which
 copies the filesystem on every run. This is a very disk-intensive operation
-which can be avoided if a different driver is used, for example `overlay`.
+which can be avoided if a different driver is used, for example `overlay2`.
 
 1. Make sure a recent kernel is used, preferably `>= 4.2`.
 1. Check whether the `overlay` module is loaded:
@@ -275,16 +275,20 @@ which can be avoided if a different driver is used, for example `overlay`.
 
     ```
     variables:
-      DOCKER_DRIVER: overlay
+      DOCKER_DRIVER: overlay2
     ```
+    
+> **Note:**
+- For more information about using OverlayFS with Docker, you can read
+  [Use the OverlayFS storage driver](https://docs.docker.com/engine/userguide/storagedriver/overlayfs-driver/).
 
 ## Using the GitLab Container Registry
 
 > **Notes:**
 - This feature requires GitLab 8.8 and GitLab Runner 1.2.
-- Starting from GitLab 8.12, if you have 2FA enabled in your account, you need
-  to pass a personal access token instead of your password in order to login to
-  GitLab's Container Registry.
+- Starting from GitLab 8.12, if you have [2FA] enabled in your account, you need
+  to pass a [personal access token][pat] instead of your password in order to
+  login to GitLab's Container Registry.
 
 Once you've built a Docker image, you can push it up to the built-in
 [GitLab Container Registry](../../user/project/container_registry.md). For example,
@@ -409,3 +413,5 @@ Some things you should be aware of when using the Container Registry:
 
 [docker-in-docker]: https://blog.docker.com/2013/09/docker-can-now-run-within-docker/
 [docker-cap]: https://docs.docker.com/engine/reference/run/#runtime-privilege-and-linux-capabilities
+[2fa]: ../../user/profile/account/two_factor_authentication.md
+[pat]: ../../user/profile/personal_access_tokens.md

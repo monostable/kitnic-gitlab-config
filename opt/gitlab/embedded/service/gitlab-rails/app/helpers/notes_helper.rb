@@ -10,8 +10,8 @@ module NotesHelper
     Ability.can_edit_note?(current_user, note)
   end
 
-  def note_supports_slash_commands?(note)
-    Notes::SlashCommandsService.supported?(note, current_user)
+  def note_supports_quick_actions?(note)
+    Notes::QuickActionsService.supported?(note, current_user)
   end
 
   def noteable_json(noteable)
@@ -19,7 +19,7 @@ module NotesHelper
       id: noteable.id,
       class: noteable.class.name,
       resources: noteable.class.table_name,
-      project_id: noteable.project.id,
+      project_id: noteable.project.id
     }.to_json
   end
 
@@ -34,7 +34,7 @@ module NotesHelper
 
     data = {
       line_code: line_code,
-      line_type: line_type,
+      line_type: line_type
     }
 
     if @use_legacy_diff_notes
@@ -47,17 +47,33 @@ module NotesHelper
     data
   end
 
+  def add_diff_note_button(line_code, position, line_type)
+    return if @diff_notes_disabled
+
+    button_tag '',
+      class: 'add-diff-note js-add-diff-note-button',
+      type: 'submit', name: 'button',
+      data: diff_view_line_data(line_code, position, line_type),
+      title: 'Add a comment to this line' do
+      icon('comment-o')
+    end
+  end
+
   def link_to_reply_discussion(discussion, line_type = nil)
     return unless current_user
 
-    data = { discussion_id: discussion.id, line_type: line_type }
+    data = {
+      discussion_id: discussion.reply_id,
+      discussion_project_id: discussion.project&.id,
+      line_type: line_type
+    }
 
     button_tag 'Reply...', class: 'btn btn-text-field js-discussion-reply-button',
                            data: data, title: 'Add a reply'
   end
 
   def note_max_access_for_user(note)
-    note.project.team.human_max_access(note.author_id)
+    note.project.team.max_member_access(note.author_id)
   end
 
   def discussion_path(discussion)
@@ -69,33 +85,34 @@ module NotesHelper
 
       path_params = version_params.merge(anchor: discussion.line_code)
 
-      diffs_namespace_project_merge_request_path(discussion.project.namespace, discussion.project, discussion.noteable, path_params)
+      diffs_project_merge_request_path(discussion.project, discussion.noteable, path_params)
     elsif discussion.for_commit?
       anchor = discussion.line_code if discussion.diff_discussion?
 
-      namespace_project_commit_path(discussion.project.namespace, discussion.project, discussion.noteable, anchor: anchor)
+      project_commit_path(discussion.project, discussion.noteable, anchor: anchor)
     end
   end
 
-  def notes_url
+  def notes_url(params = {})
     if @snippet.is_a?(PersonalSnippet)
-      snippet_notes_path(@snippet)
+      snippet_notes_path(@snippet, params)
     else
-      namespace_project_noteable_notes_path(
-        namespace_id: @project.namespace,
-        project_id: @project,
-        target_id: @noteable.id,
-        target_type: @noteable.class.name.underscore
-      )
+      params.merge!(target_id: @noteable.id, target_type: @noteable.class.name.underscore)
+
+      project_noteable_notes_path(@project, params)
     end
   end
 
-  def note_url(note)
+  def note_url(note, project = @project)
     if note.noteable.is_a?(PersonalSnippet)
       snippet_note_path(note.noteable, note)
     else
-      namespace_project_note_path(@project.namespace, @project, note)
+      project_note_path(project, note)
     end
+  end
+
+  def noteable_note_url(note)
+    Gitlab::UrlBuilder.build(note)
   end
 
   def form_resources
@@ -118,5 +135,19 @@ module NotesHelper
     else
       can?(current_user, :create_note, @project)
     end
+  end
+
+  def initial_notes_data(autocomplete)
+    {
+      notesUrl: notes_url,
+      notesIds: @notes.map(&:id),
+      now: Time.now.to_i,
+      diffView: diff_view,
+      autocomplete: autocomplete
+    }
+  end
+
+  def discussion_resolved_intro(discussion)
+    discussion.resolved_by_push? ? 'Automatically resolved' : 'Resolved'
   end
 end

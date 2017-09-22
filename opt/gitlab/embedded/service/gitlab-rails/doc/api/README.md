@@ -11,10 +11,14 @@ following locations:
 - [Award Emoji](award_emoji.md)
 - [Branches](branches.md)
 - [Broadcast Messages](broadcast_messages.md)
-- [Build Variables](build_variables.md)
+- [Project-level Variables](project_level_variables.md)
+- [Group-level Variables](group_level_variables.md)
 - [Commits](commits.md)
 - [Deployments](deployments.md)
 - [Deploy Keys](deploy_keys.md)
+- [Environments](environments.md)
+- [Events](events.md)
+- [Feature flags](features.md)
 - [Gitignores templates](templates/gitignores.md)
 - [GitLab CI Config templates](templates/gitlab_ci_ymls.md)
 - [Groups](groups.md)
@@ -26,17 +30,20 @@ following locations:
 - [Keys](keys.md)
 - [Labels](labels.md)
 - [Merge Requests](merge_requests.md)
-- [Milestones](milestones.md)
-- [Open source license templates](templates/licenses.md)
+- [Project milestones](milestones.md)
+- [Group milestones](group_milestones.md)
 - [Namespaces](namespaces.md)
 - [Notes](notes.md) (comments)
 - [Notification settings](notification_settings.md)
+- [Open source license templates](templates/licenses.md)
 - [Pipelines](pipelines.md)
 - [Pipeline Triggers](pipeline_triggers.md)
+- [Pipeline Schedules](pipeline_schedules.md)
 - [Projects](projects.md) including setting Webhooks
 - [Project Access Requests](access_requests.md)
 - [Project Members](members.md)
 - [Project Snippets](project_snippets.md)
+- [Protected Branches](protected_branches.md)
 - [Repositories](repositories.md)
 - [Repository Files](repository_files.md)
 - [Runners](runners.md)
@@ -48,22 +55,58 @@ following locations:
 - [Tags](tags.md)
 - [Todos](todos.md)
 - [Users](users.md)
-- [Validate CI configuration](ci/lint.md)
+- [Validate CI configuration](lint.md)
 - [V3 to V4](v3_to_v4.md)
 - [Version](version.md)
+- [Wikis](wikis.md)
 
-### Internal CI API
+## Road to GraphQL
 
-The following documentation is for the [internal CI API](ci/README.md):
+We have changed our plans to move to GraphQL. After reviewing the GraphQL license, anything related to the Facebook BSD plus patent license will not be allowed at GitLab.
 
-- [Builds](ci/builds.md)
-- [Runners](ci/runners.md)
+## Basic usage
+
+API requests should be prefixed with `api` and the API version. The API version
+is defined in [`lib/api.rb`][lib-api-url]. For example, the root of the v4 API
+is at `/api/v4`.
+
+For endpoints that require [authentication](#authentication), you need to pass
+a `private_token` parameter via query string or header. If passed as a header,
+the header name must be `PRIVATE-TOKEN` (uppercase and with a dash instead of
+an underscore).
+
+Example of a valid API request:
+
+```
+GET /projects?private_token=9koXpg98eAheJpvBs5tK
+```
+
+Example of a valid API request using cURL and authentication via header:
+
+```shell
+curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects"
+```
+
+Example of a valid API request using cURL and authentication via a query string:
+
+```shell
+curl "https://gitlab.example.com/api/v4/projects?private_token=9koXpg98eAheJpvBs5tK"
+```
+
+The API uses JSON to serialize data. You don't need to specify `.json` at the
+end of an API URL.
 
 ## Authentication
 
-All API requests require authentication via a session cookie or token. There are
-three types of tokens available: private tokens, OAuth 2 tokens, and personal
-access tokens.
+Most API requests require authentication via a session cookie or token. For
+those cases where it is not required, this will be mentioned in the documentation
+for each individual endpoint. For example, the [`/projects/:id` endpoint](projects.md).
+
+There are three types of access tokens available:
+
+1. [OAuth2 tokens](#oauth2-tokens)
+1. [Private tokens](#private-tokens)
+1. [Personal access tokens](#personal-access-tokens)
 
 If authentication information is invalid or omitted, an error message will be
 returned with status code `401`:
@@ -74,20 +117,13 @@ returned with status code `401`:
 }
 ```
 
-### Session Cookie
+### Session cookie
 
 When signing in to GitLab as an ordinary user, a `_gitlab_session` cookie is
 set. The API will use this cookie for authentication if it is present, but using
 the API to generate a new session cookie is currently not supported.
 
-### Private Tokens
-
-You need to pass a `private_token` parameter via query string or header. If passed as a
-header, the header name must be `PRIVATE-TOKEN` (uppercase and with a dash instead of
-an underscore). You can find or reset your private token in your account page
-(`/profile/account`).
-
-### OAuth 2 Tokens
+### OAuth2 tokens
 
 You can use an OAuth 2 token to authenticate with the API by passing it either in the
 `access_token` parameter or in the `Authorization` header.
@@ -100,30 +136,31 @@ curl --header "Authorization: Bearer OAUTH-TOKEN" https://gitlab.example.com/api
 
 Read more about [GitLab as an OAuth2 client](oauth2.md).
 
-### Personal Access Tokens
+### Private tokens
 
-> [Introduced][ce-3749] in GitLab 8.8.
+Private tokens provide full access to the GitLab API. Anyone with access to
+them can interact with GitLab as if they were you. You can find or reset your
+private token in your account page (`/profile/account`).
 
-You can create as many personal access tokens as you like from your GitLab
-profile (`/profile/personal_access_tokens`); perhaps one for each application
-that needs access to the GitLab API.
+For examples of usage, [read the basic usage section](#basic-usage).
+
+### Personal access tokens
+
+Instead of using your private token which grants full access to your account,
+personal access tokens could be a better fit because of their granular
+permissions.
 
 Once you have your token, pass it to the API using either the `private_token`
-parameter or the `PRIVATE-TOKEN` header.
+parameter or the `PRIVATE-TOKEN` header. For examples of usage,
+[read the basic usage section](#basic-usage).
 
-> [Introduced][ce-5951] in GitLab 8.15.
-
-Personal Access Tokens can be created with one or more scopes that allow various actions
-that a given token can perform. Although there are only two scopes available at the
-moment – `read_user` and `api` – the groundwork has been laid to add more scopes easily.
-
-At any time you can revoke any personal access token by just clicking **Revoke**.
+[Read more about personal access tokens.][pat]
 
 ### Impersonation tokens
 
 > [Introduced][ce-9099] in GitLab 9.0. Needs admin permissions.
 
-Impersonation tokens are a type of [Personal Access Token](#personal-access-tokens)
+Impersonation tokens are a type of [personal access token][pat]
 that can only be created by an admin for a specific user.
 
 They are a better alternative to using the user's password/private token
@@ -132,8 +169,10 @@ or private token, since the password/token can change over time. Impersonation
 tokens are a great fit if you want to build applications or tools which
 authenticate with the API as a specific user.
 
-For more information about the usage please refer to the
+For more information, refer to the
 [users API](users.md#retrieve-user-impersonation-tokens) docs.
+
+For examples of usage, [read the basic usage section](#basic-usage).
 
 ### Sudo
 
@@ -187,26 +226,6 @@ GET /projects?private_token=9koXpg98eAheJpvBs5tK&sudo=23
 curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" --header "SUDO: 23" "https://gitlab.example.com/api/v4/projects"
 ```
 
-## Basic Usage
-
-API requests should be prefixed with `api` and the API version. The API version
-is defined in [`lib/api.rb`][lib-api-url].
-
-Example of a valid API request:
-
-```
-GET /projects?private_token=9koXpg98eAheJpvBs5tK
-```
-
-Example of a valid API request using cURL and authentication via header:
-
-```shell
-curl --header "PRIVATE-TOKEN: 9koXpg98eAheJpvBs5tK" "https://gitlab.example.com/api/v4/projects"
-```
-
-The API uses JSON to serialize data. You don't need to specify `.json` at the
-end of an API URL.
-
 ## Status codes
 
 The API is designed to return different status codes according to context and
@@ -219,8 +238,8 @@ The following table gives an overview of how the API functions generally behave.
 | ------------ | ----------- |
 | `GET`   | Access one or more resources and return the result as JSON. |
 | `POST`  | Return `201 Created` if the resource is successfully created and return the newly created resource as JSON. |
-| `GET` / `PUT` / `DELETE` | Return `200 OK` if the resource is accessed, modified or deleted successfully. The (modified) result is returned as JSON. |
-| `DELETE` | Designed to be idempotent, meaning a request to a resource still returns `200 OK` even it was deleted before or is not available. The reasoning behind this, is that the user is not really interested if the resource existed before or not. |
+| `GET` / `PUT` | Return `200 OK` if the resource is accessed or modified successfully. The (modified) result is returned as JSON. |
+| `DELETE` | Returns `204 No Content` if the resuource was deleted successfully. |
 
 The following table shows the possible return codes for API requests.
 
@@ -236,6 +255,7 @@ The following table shows the possible return codes for API requests.
 | `404 Not Found` | A resource could not be accessed, e.g., an ID for a resource could not be found. |
 | `405 Method Not Allowed` | The request is not supported. |
 | `409 Conflict` | A conflicting resource already exists, e.g., creating a project with a name that already exists. |
+| `412` | Indicates the request was denied. May happen if the `If-Unmodified-Since` header is provided when trying to delete a resource, which was modified in between. |
 | `422 Unprocessable` | The entity could not be processed. |
 | `500 Server Error` | While handling the request something went wrong server-side. |
 
@@ -311,7 +331,18 @@ URL-encoded.
 For example, `/` is represented by `%2F`:
 
 ```
-/api/v4/projects/diaspora%2Fdiaspora
+GET /api/v4/projects/diaspora%2Fdiaspora
+```
+
+## Branches & tags name encoding
+
+If your branch or tag contains a `/`, make sure the branch/tag name is
+URL-encoded.
+
+For example, `/` is represented by `%2F`:
+
+```
+GET /api/v4/projects/1/branches/my%2Fbranch/commits
 ```
 
 ## `id` vs `iid`
@@ -419,3 +450,4 @@ programming languages. Visit the [GitLab website] for a complete list.
 [ce-3749]: https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/3749
 [ce-5951]: https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/5951
 [ce-9099]: https://gitlab.com/gitlab-org/gitlab-ce/merge_requests/9099
+[pat]: ../user/profile/personal_access_tokens.md

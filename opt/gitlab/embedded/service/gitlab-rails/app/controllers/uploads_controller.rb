@@ -9,12 +9,16 @@ class UploadsController < ApplicationController
   private
 
   def find_model
+    return nil unless params[:id]
+
     return render_404 unless upload_model && upload_mount
 
     @model = upload_model.find(params[:id])
   end
 
   def authorize_access!
+    return nil unless model
+
     authorized =
       case model
       when Note
@@ -33,6 +37,8 @@ class UploadsController < ApplicationController
   end
 
   def authorize_create_access!
+    return nil unless model
+
     # for now we support only personal snippets comments
     authorized = can?(current_user, :comment_personal_snippet, model)
 
@@ -73,12 +79,17 @@ class UploadsController < ApplicationController
   def uploader
     return @uploader if defined?(@uploader)
 
-    if model.is_a?(PersonalSnippet)
+    case model
+    when nil
+      @uploader = PersonalFileUploader.new(nil, params[:secret])
+
+      @uploader.retrieve_from_store!(params[:filename])
+    when PersonalSnippet
       @uploader = PersonalFileUploader.new(model, params[:secret])
 
       @uploader.retrieve_from_store!(params[:filename])
     else
-      @uploader = @model.send(upload_mount)
+      @uploader = @model.public_send(upload_mount) # rubocop:disable GitlabSecurity/PublicSend
 
       redirect_to @uploader.url unless @uploader.file_storage?
     end

@@ -105,21 +105,20 @@ merge request.
   considered beta or experimental, put this info in a note, not in the heading.
 - When introducing a new document, be careful for the headings to be
   grammatically and syntactically correct. It is advised to mention one or all
-  of the following GitLab members for a review: `@axil`, `@rspeicher`, `@marcia`,
-  `@SeanPackham`. This is to ensure that no document with wrong heading is going
+  of the following GitLab members for a review: `@axil`, `@rspeicher`, `@marcia`.
+  This is to ensure that no document with wrong heading is going
   live without an audit, thus preventing dead links and redirection issues when
   corrected
 - Leave exactly one newline after a heading
 
 ## Links
 
-- If a link makes the paragraph to span across multiple lines, do not use
-  the regular Markdown approach: `[Text](https://example.com)`. Instead use
-  `[Text][identifier]` and at the very bottom of the document add:
-  `[identifier]: https://example.com`. This is another way to create Markdown
-  links which keeps the document clear and concise. Bonus points if you also
-  add an alternative text: `[identifier]: https://example.com "Alternative text"`
-  that appears when hovering your mouse on a link
+- Use the regular inline link markdown markup `[Text](https://example.com)`.
+  It's easier to read, review, and maintain.
+- If there's a link that repeats several times through the same document,
+  you can use `[Text][identifier]` and at the bottom of the section or the
+  document add: `[identifier]: https://example.com`, in which case, we do
+  encourage you to also add an alternative text: `[identifier]: https://example.com "Alternative text"` that appears when hovering your mouse on a link.
 
 ### Linking to inline docs
 
@@ -198,10 +197,17 @@ You can combine one or more of the following:
   the `.md` document that you're working on is located. Always prepend their
   names with the name of the document that they will be included in. For
   example, if there is a document called `twitter.md`, then a valid image name
-  could be `twitter_login_screen.png`.
+  could be `twitter_login_screen.png`. [**Exception**: images for
+  [articles](writing_documentation.md#technical-articles) should be
+  put in a directory called `img` underneath `/articles/article_title/img/`, therefore,
+  there's no need to prepend the document name to their filenames.]
 - Images should have a specific, non-generic name that will differentiate them.
 - Keep all file names in lower case.
 - Consider using PNG images instead of JPEG.
+- Compress all images with <https://tinypng.com/> or similar tool.
+- Compress gifs with <https://ezgif.com/optimize> or similar toll.
+- Images should be used (only when necessary) to _illustrate_ the description
+of a process, not to _replace_ it.
 
 Inside the document:
 
@@ -381,8 +387,8 @@ the style below as a guide:
 1. Save the file and [restart] GitLab for the changes to take effect.
 
 
-[reconfigure]: path/to/administration/gitlab_restart.md#omnibus-gitlab-reconfigure
-[restart]: path/to/administration/gitlab_restart.md#installations-from-source
+[reconfigure]: path/to/administration/restart_gitlab.md#omnibus-gitlab-reconfigure
+[restart]: path/to/administration/restart_gitlab.md#installations-from-source
 ````
 
 In this case:

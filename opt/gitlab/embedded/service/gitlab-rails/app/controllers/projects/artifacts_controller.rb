@@ -7,7 +7,7 @@ class Projects::ArtifactsController < Projects::ApplicationController
   before_action :authorize_update_build!, only: [:keep]
   before_action :extract_ref_name_and_path
   before_action :validate_artifacts!
-  before_action :set_path_and_entry, only: [:file, :raw]
+  before_action :entry, only: [:file]
 
   def download
     if artifacts_file.file_storage?
@@ -27,7 +27,7 @@ class Projects::ArtifactsController < Projects::ApplicationController
 
   def file
     blob = @entry.blob
-    override_max_blob_size(blob)
+    conditionally_expand_blob(blob)
 
     respond_to do |format|
       format.html do
@@ -41,12 +41,15 @@ class Projects::ArtifactsController < Projects::ApplicationController
   end
 
   def raw
-    send_artifacts_entry(build, @entry)
+    path = Gitlab::Ci::Build::Artifacts::Path
+      .new(params[:path])
+
+    send_artifacts_entry(build, path)
   end
 
   def keep
     build.keep_artifacts!
-    redirect_to namespace_project_build_path(project.namespace, project, build)
+    redirect_to project_job_path(project, build)
   end
 
   def latest_succeeded
@@ -79,7 +82,7 @@ class Projects::ArtifactsController < Projects::ApplicationController
   end
 
   def build_from_id
-    project.builds.find_by(id: params[:build_id]) if params[:build_id]
+    project.builds.find_by(id: params[:job_id]) if params[:job_id]
   end
 
   def build_from_ref
@@ -93,9 +96,8 @@ class Projects::ArtifactsController < Projects::ApplicationController
     @artifacts_file ||= build.artifacts_file
   end
 
-  def set_path_and_entry
-    @path = params[:path]
-    @entry = build.artifacts_metadata_entry(@path)
+  def entry
+    @entry = build.artifacts_metadata_entry(params[:path])
 
     render_404 unless @entry.exists?
   end

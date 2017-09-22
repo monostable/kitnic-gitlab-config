@@ -1,6 +1,6 @@
 class PasswordsController < Devise::PasswordsController
   before_action :resource_from_email, only: [:create]
-  before_action :prevent_ldap_reset,  only: [:create]
+  before_action :prevent_ldap_reset, only: [:create]
   before_action :throttle_reset,      only: [:create]
 
   def edit
@@ -25,7 +25,7 @@ class PasswordsController < Devise::PasswordsController
 
   def update
     super do |resource|
-      if resource.valid? && resource.require_password?
+      if resource.valid? && resource.require_password_creation?
         resource.update_attribute(:password_automatically_set, false)
       end
     end
@@ -39,7 +39,7 @@ class PasswordsController < Devise::PasswordsController
   end
 
   def prevent_ldap_reset
-    return unless resource && resource.ldap_user?
+    return unless resource&.ldap_user?
 
     redirect_to after_sending_reset_password_instructions_path_for(resource_name),
       alert: "Cannot reset password for LDAP user."

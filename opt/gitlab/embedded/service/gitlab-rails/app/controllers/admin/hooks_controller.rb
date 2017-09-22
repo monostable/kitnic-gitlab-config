@@ -1,5 +1,7 @@
 class Admin::HooksController < Admin::ApplicationController
-  before_action :hook, only: :edit
+  include HooksExecution
+
+  before_action :hook_logs, only: :edit
 
   def index
     @hooks = SystemHook.all
@@ -32,19 +34,13 @@ class Admin::HooksController < Admin::ApplicationController
   def destroy
     hook.destroy
 
-    redirect_to admin_hooks_path
+    redirect_to admin_hooks_path, status: 302
   end
 
   def test
-    data = {
-      event_name: "project_create",
-      name: "Ruby",
-      path: "ruby",
-      project_id: 1,
-      owner_name: "Someone",
-      owner_email: "example@gitlabhq.com"
-    }
-    hook.execute(data, 'system_hooks')
+    result = TestHooks::SystemService.new(hook, current_user, params[:trigger]).execute
+
+    set_hook_execution_notice(result)
 
     redirect_back_or_default
   end
@@ -55,11 +51,17 @@ class Admin::HooksController < Admin::ApplicationController
     @hook ||= SystemHook.find(params[:id])
   end
 
+  def hook_logs
+    @hook_logs ||=
+      Kaminari.paginate_array(hook.web_hook_logs.order(created_at: :desc)).page(params[:page])
+  end
+
   def hook_params
     params.require(:hook).permit(
       :enable_ssl_verification,
       :push_events,
       :tag_push_events,
+      :repository_update_events,
       :token,
       :url
     )

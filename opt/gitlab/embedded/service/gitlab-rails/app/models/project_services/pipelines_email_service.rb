@@ -53,9 +53,10 @@ class PipelinesEmailService < Service
     [
       { type: 'textarea',
         name: 'recipients',
-        placeholder: 'Emails separated by comma' },
+        placeholder: 'Emails separated by comma',
+        required: true },
       { type: 'checkbox',
-        name: 'notify_only_broken_pipelines' },
+        name: 'notify_only_broken_pipelines' }
     ]
   end
 
@@ -79,6 +80,6 @@ class PipelinesEmailService < Service
   end
 
   def retrieve_recipients(data)
-    recipients.to_s.split(',').reject(&:blank?)
+    recipients.to_s.split(/[,(?:\r?\n) ]+/).reject(&:empty?)
   end
 end

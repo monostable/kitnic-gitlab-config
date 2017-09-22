@@ -14,6 +14,14 @@ module Gitlab
             end
           end
 
+          class AllowedValuesValidator < ActiveModel::EachValidator
+            def validate_each(record, attribute, value)
+              unless options[:in].include?(value.to_s)
+                record.errors.add(attribute, "unknown value: #{value}")
+              end
+            end
+          end
+
           class ArrayOfStringsValidator < ActiveModel::EachValidator
             include LegacyValidationHelpers
 
@@ -40,6 +48,14 @@ module Gitlab
             def validate_each(record, attribute, value)
               unless validate_duration(value)
                 record.errors.add(attribute, 'should be a duration')
+              end
+            end
+          end
+
+          class HashOrStringValidator < ActiveModel::EachValidator
+            def validate_each(record, attribute, value)
+              unless value.is_a?(Hash) || value.is_a?(String)
+                record.errors.add(attribute, 'should be a hash or a string')
               end
             end
           end

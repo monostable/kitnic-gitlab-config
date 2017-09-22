@@ -20,7 +20,7 @@
             %span
               Groups
         = nav_link path: 'builds#index' do
-          = link_to admin_builds_path, title: 'Jobs' do
+          = link_to admin_jobs_path, title: 'Jobs' do
             %span
               Jobs
         = nav_link path: ['runners#index', 'runners#show'] do
@@ -31,3 +31,7 @@
           = link_to admin_cohorts_path, title: 'Cohorts' do
             %span
               Cohorts
+        = nav_link(controller: :conversational_development_index) do
+          = link_to admin_conversational_development_index_path, title: 'ConvDev Index' do
+            %span
+              ConvDev Index

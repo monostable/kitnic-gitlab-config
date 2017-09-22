@@ -27,6 +27,13 @@
       }
     };
 
+    w.gl.utils.isInIssuePage = () => {
+      const page = gl.utils.getPagePath(1);
+      const action = gl.utils.getPagePath(2);
+
+      return page === 'issues' && action === 'show';
+    };
+
     w.gl.utils.ajaxGet = function(url) {
       return $.ajax({
         type: "GET",
@@ -86,18 +93,31 @@
       // This is required to handle non-unicode characters in hash
       hash = decodeURIComponent(hash);
 
+      const fixedTabs = document.querySelector('.js-tabs-affix');
+      const fixedDiffStats = document.querySelector('.js-diff-files-changed.is-stuck');
+      const fixedNav = document.querySelector('.navbar-gitlab');
+
+      var adjustment = 0;
+      if (fixedNav) adjustment -= fixedNav.offsetHeight;
+
       // scroll to user-generated markdown anchor if we cannot find a match
       if (document.getElementById(hash) === null) {
         var target = document.getElementById('user-content-' + hash);
         if (target && target.scrollIntoView) {
           target.scrollIntoView(true);
+          window.scrollBy(0, adjustment);
         }
       } else {
         // only adjust for fixedTabs when not targeting user-generated content
-        var fixedTabs = document.querySelector('.js-tabs-affix');
         if (fixedTabs) {
-          window.scrollBy(0, -fixedTabs.offsetHeight);
+          adjustment -= fixedTabs.offsetHeight;
         }
+
+        if (fixedDiffStats) {
+          adjustment -= fixedDiffStats.offsetHeight;
+        }
+
+        window.scrollBy(0, adjustment);
       }
     };
 
@@ -135,7 +155,10 @@
     gl.utils.getUrlParamsArray = function () {
       // We can trust that each param has one & since values containing & will be encoded
       // Remove the first character of search as it is always ?
-      return window.location.search.slice(1).split('&');
+      return window.location.search.slice(1).split('&').map((param) => {
+        const split = param.split('=');
+        return [decodeURI(split[0]), split[1]].join('=');
+      });
     };
 
     gl.utils.isMetaKey = function(e) {
@@ -151,11 +174,12 @@
     };
 
     gl.utils.scrollToElement = function($el) {
-      var top = $el.offset().top;
-      gl.mrTabsHeight = gl.mrTabsHeight || $('.merge-request-tabs').height();
+      const top = $el.offset().top;
+      const mrTabsHeight = $('.merge-request-tabs').height() || 0;
+      const headerHeight = $('.navbar-gitlab').height() || 0;
 
       return $('body, html').animate({
-        scrollTop: top - (gl.mrTabsHeight)
+        scrollTop: top - mrTabsHeight - headerHeight,
       }, 200);
     };
 
@@ -164,8 +188,8 @@
       if the name does not exist this function will return `null`
       otherwise it will return the value of the param key provided
     */
-    w.gl.utils.getParameterByName = (name) => {
-      const url = window.location.href;
+    w.gl.utils.getParameterByName = (name, parseUrl) => {
+      const url = parseUrl || window.location.href;
       name = name.replace(/[[\]]/g, '\\$&');
       const regex = new RegExp(`[?&]${name}(=([^&#]*)|&|#|$)`);
       const results = regex.exec(url);
@@ -195,10 +219,12 @@
 
       const textBefore = value.substring(0, selectionStart);
       const textAfter = value.substring(selectionEnd, value.length);
-      const newText = textBefore + text + textAfter;
+
+      const insertedText = text instanceof Function ? text(textBefore, textAfter) : text;
+      const newText = textBefore + insertedText + textAfter;
 
       target.value = newText;
-      target.selectionStart = target.selectionEnd = selectionStart + text.length;
+      target.selectionStart = target.selectionEnd = selectionStart + insertedText.length;
 
       // Trigger autosave
       $(target).trigger('input');
@@ -360,15 +386,15 @@
     w.gl.utils.backOff = (fn, timeout = 60000) => {
       const maxInterval = 32000;
       let nextInterval = 2000;
-
-      const startTime = Date.now();
+      let timeElapsed = 0;
 
       return new Promise((resolve, reject) => {
         const stop = arg => ((arg instanceof Error) ? reject(arg) : resolve(arg));
 
         const next = () => {
-          if (Date.now() - startTime < timeout) {
-            setTimeout(fn.bind(null, next, stop), nextInterval);
+          if (timeElapsed < timeout) {
+            setTimeout(() => fn(next, stop), nextInterval);
+            timeElapsed += nextInterval;
             nextInterval = Math.min(nextInterval + nextInterval, maxInterval);
           } else {
             reject(new Error('BACKOFF_TIMEOUT'));

@@ -3,6 +3,7 @@ require 'addressable/uri'
 class Projects::CompareController < Projects::ApplicationController
   include DiffForPath
   include DiffHelper
+  include RendersCommits
 
   # Authorize
   before_action :require_non_empty_project
@@ -31,9 +32,9 @@ class Projects::CompareController < Projects::ApplicationController
         from: params[:from].presence,
         to: params[:to].presence
       }
-      redirect_to namespace_project_compare_index_path(@project.namespace, @project, from_to_vars)
+      redirect_to project_compare_index_path(@project, from_to_vars)
     else
-      redirect_to namespace_project_compare_path(@project.namespace, @project,
+      redirect_to project_compare_path(@project,
                                                params[:from], params[:to])
     end
   end
@@ -50,14 +51,10 @@ class Projects::CompareController < Projects::ApplicationController
       .execute(@project, @start_ref)
 
     if @compare
-      @commits = @compare.commits
-      @start_commit = @compare.start_commit
-      @commit = @compare.commit
-      @base_commit = @compare.base_commit
-
+      @commits = prepare_commits_for_rendering(@compare.commits)
       @diffs = @compare.diffs(diff_options)
 
-      environment_params = @repository.branch_exists?(@head_ref) ? { ref: @head_ref } : { commit: @commit }
+      environment_params = @repository.branch_exists?(@head_ref) ? { ref: @head_ref } : { commit: @compare.commit }
       @environment = EnvironmentsFinder.new(@project, current_user, environment_params).execute.last
 
       @diff_notes_disabled = true
@@ -65,7 +62,7 @@ class Projects::CompareController < Projects::ApplicationController
   end
 
   def merge_request
-    @merge_request ||= MergeRequestsFinder.new(current_user, project_id: @project.id).execute.opened.
-      find_by(source_project: @project, source_branch: @head_ref, target_branch: @start_ref)
+    @merge_request ||= MergeRequestsFinder.new(current_user, project_id: @project.id).execute.opened
+      .find_by(source_project: @project, source_branch: @head_ref, target_branch: @start_ref)
   end
 end

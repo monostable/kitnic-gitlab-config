@@ -1,5 +1,6 @@
 class Commit
   extend ActiveModel::Naming
+  extend Gitlab::Cache::RequestCache
 
   include ActiveModel::Conversion
   include Noteable
@@ -14,7 +15,9 @@ class Commit
   participant :committer
   participant :notes_with_associations
 
-  attr_accessor :project
+  attr_accessor :project, :author
+  attr_accessor :redacted_description_html
+  attr_accessor :redacted_title_html
 
   DIFF_SAFE_LINES = Gitlab::Git::DiffCollection::DEFAULT_LIMITS[:max_lines]
 
@@ -24,6 +27,13 @@ class Commit
 
   # The SHA can be between 7 and 40 hex characters.
   COMMIT_SHA_PATTERN = '\h{7,40}'.freeze
+
+  def banzai_render_context(field)
+    context = { pipeline: :single_line, project: self.project }
+    context[:author] = self.author if self.author
+
+    context
+  end
 
   class << self
     def decorate(commits, project)
@@ -49,12 +59,13 @@ class Commit
     def max_diff_options
       {
         max_files: DIFF_HARD_LIMIT_FILES,
-        max_lines: DIFF_HARD_LIMIT_LINES,
+        max_lines: DIFF_HARD_LIMIT_LINES
       }
     end
 
     def from_hash(hash, project)
-      new(Gitlab::Git::Commit.new(hash), project)
+      raw_commit = Gitlab::Git::Commit.new(project.repository.raw, hash)
+      new(raw_commit, project)
     end
 
     def valid_hash?(key)
@@ -114,16 +125,16 @@ class Commit
   #
   # Usually, the commit title is the first line of the commit message.
   # In case this first line is longer than 100 characters, it is cut off
-  # after 80 characters and ellipses (`&hellp;`) are appended.
+  # after 80 characters + `...`
   def title
-    full_title.length > 100 ? full_title[0..79] << "…" : full_title
+    return full_title if full_title.length < 100
+
+    full_title.truncate(81, separator: ' ', omission: '…')
   end
 
   # Returns the full commits title
   def full_title
-    return @full_title if @full_title
-
-    @full_title =
+    @full_title ||=
       if safe_message.blank?
         no_commit_message
       else
@@ -131,17 +142,12 @@ class Commit
       end
   end
 
-  # Returns the commits description
-  #
-  # cut off, ellipses (`&hellp;`) are prepended to the commit message.
+  # Returns full commit message if title is truncated (greater than 99 characters)
+  # otherwise returns commit message without first line
   def description
-    title_end = safe_message.index("\n")
-    @description ||=
-      if (!title_end && safe_message.length > 100) || (title_end && title_end > 100)
-        "…" << safe_message[80..-1]
-      else
-        safe_message.split("\n", 2)[1].try(:chomp)
-      end
+    return safe_message if full_title.length >= 100
+
+    safe_message.split("\n", 2)[1].try(:chomp)
   end
 
   def description?
@@ -174,19 +180,9 @@ class Commit
   end
 
   def author
-    if RequestStore.active?
-      key = "commit_author:#{author_email.downcase}"
-      # nil is a valid value since no author may exist in the system
-      if RequestStore.store.has_key?(key)
-        @author = RequestStore.store[key]
-      else
-        @author = find_author_by_any_email
-        RequestStore.store[key] = @author
-      end
-    else
-      @author ||= find_author_by_any_email
-    end
+    User.find_by_any_email(author_email.downcase)
   end
+  request_cache(:author) { author_email.downcase }
 
   def committer
     @committer ||= User.find_by_any_email(committer_email.downcase)
@@ -213,7 +209,7 @@ class Commit
   end
 
   def method_missing(m, *args, &block)
-    @raw.send(m, *args, &block)
+    @raw.__send__(m, *args, &block) # rubocop:disable GitlabSecurity/PublicSend
   end
 
   def respond_to_missing?(method, include_private = false)
@@ -248,12 +244,42 @@ class Commit
     @statuses[ref] = pipelines.latest_status(ref)
   end
 
+  def signature
+    return @signature if defined?(@signature)
+
+    @signature = gpg_commit.signature
+  end
+
+  delegate :has_signature?, to: :gpg_commit
+
   def revert_branch_name
     "revert-#{short_id}"
   end
 
   def cherry_pick_branch_name
     project.repository.next_branch("cherry-pick-#{short_id}", mild: true)
+  end
+
+  def cherry_pick_description(user)
+    message_body = "(cherry picked from commit #{sha})"
+
+    if merged_merge_request?(user)
+      commits_in_merge_request = merged_merge_request(user).commits
+
+      if commits_in_merge_request.present?
+        message_body << "\n"
+
+        commits_in_merge_request.reverse.each do |commit_in_merge|
+          message_body << "\n#{commit_in_merge.short_id} #{commit_in_merge.title}"
+        end
+      end
+    end
+
+    message_body
+  end
+
+  def cherry_pick_message(user)
+    %Q{#{message}\n\n#{cherry_pick_description(user)}}
   end
 
   def revert_description(user)
@@ -326,14 +352,11 @@ class Commit
   end
 
   def raw_diffs(*args)
-    use_gitaly = Gitlab::GitalyClient.feature_enabled?(:commit_raw_diffs)
-    deltas_only = args.last.is_a?(Hash) && args.last[:deltas_only]
+    raw.diffs(*args)
+  end
 
-    if use_gitaly && !deltas_only
-      Gitlab::GitalyClient::Commit.diff_from_parent(self, *args)
-    else
-      raw.diffs(*args)
-    end
+  def raw_deltas
+    @deltas ||= raw.deltas
   end
 
   def diffs(diff_options = nil)
@@ -366,14 +389,10 @@ class Commit
     end
   end
 
-  def find_author_by_any_email
-    User.find_by_any_email(author_email.downcase)
-  end
-
   def repo_changes
     changes = { added: [], modified: [], removed: [] }
 
-    raw_diffs(deltas_only: true).each do |diff|
+    raw_deltas.each do |diff|
       if diff.deleted_file
         changes[:removed] << diff.old_path
       elsif diff.renamed_file || diff.new_file
@@ -392,5 +411,9 @@ class Commit
 
   def merged_merge_request_no_cache(user)
     MergeRequestsFinder.new(user, project_id: project.id).find_by(merge_commit_sha: id) if merge_commit?
+  end
+
+  def gpg_commit
+    @gpg_commit ||= Gitlab::Gpg::Commit.new(self)
   end
 end

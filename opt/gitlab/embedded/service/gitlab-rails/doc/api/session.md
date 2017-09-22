@@ -1,11 +1,9 @@
-# Session
+# Session API
 
-## Deprecation Notice
-
-1. Starting in GitLab 8.11, this feature has been *disabled* for users with two-factor authentication turned on.
-2. These users can access the API using [personal access tokens] instead.
-
----
+>**Deprecation notice:**
+Starting in GitLab 8.11, this feature has been **disabled** for users with
+[two-factor authentication][2fa] turned on. These users can access the API
+using [personal access tokens] instead.
 
 You can login with both GitLab and LDAP credentials in order to obtain the
 private token.
@@ -41,6 +39,7 @@ Example response:
   "twitter": "",
   "website_url": "",
   "email": "john@example.com",
+  "theme_id": 1,
   "color_scheme_id": 1,
   "projects_limit": 10,
   "current_sign_in_at": "2015-07-07T07:10:58.392Z",
@@ -52,4 +51,5 @@ Example response:
 }
 ```
 
-[personal access tokens]: ./README.md#personal-access-tokens
+[2fa]: ../user/profile/account/two_factor_authentication.md
+[personal access tokens]: ../user/profile/personal_access_tokens.md

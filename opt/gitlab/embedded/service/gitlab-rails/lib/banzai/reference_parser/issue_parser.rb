@@ -4,13 +4,10 @@ module Banzai
       self.reference_type = :issue
 
       def nodes_visible_to_user(user, nodes)
-        # It is not possible to check access rights for external issue trackers
-        return nodes if project && project.external_issue_tracker
-
         issues = issues_for_nodes(nodes)
 
-        readable_issues = Ability.
-          issues_readable_by_user(issues.values, user).to_set
+        readable_issues = Ability
+          .issues_readable_by_user(issues.values, user).to_set
 
         nodes.select do |node|
           readable_issues.include?(issues[node])
@@ -37,7 +34,8 @@ module Banzai
                 { namespace: :owner },
                 { group: [:owners, :group_members] },
                 :invited_groups,
-                :project_members
+                :project_members,
+                :project_feature
               ]
             }
           ),

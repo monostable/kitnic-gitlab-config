@@ -1,13 +1,13 @@
 class Profiles::EmailsController < Profiles::ApplicationController
   def index
     @primary = current_user.email
-    @emails = current_user.emails
+    @emails = current_user.emails.order_id_desc
   end
 
   def create
-    @email = current_user.emails.new(email_params)
+    @email = Emails::CreateService.new(current_user, email_params).execute
 
-    if @email.save
+    if @email.errors.blank?
       NotificationService.new.new_email(@email)
     else
       flash[:alert] = @email.errors.full_messages.first
@@ -18,12 +18,11 @@ class Profiles::EmailsController < Profiles::ApplicationController
 
   def destroy
     @email = current_user.emails.find(params[:id])
-    @email.destroy
 
-    current_user.update_secondary_emails!
+    Emails::DestroyService.new(current_user, email: @email.email).execute
 
     respond_to do |format|
-      format.html { redirect_to profile_emails_url }
+      format.html { redirect_to profile_emails_url, status: 302 }
       format.js { head :ok }
     end
   end

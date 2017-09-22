@@ -14,29 +14,6 @@ ul.notes {
   margin: 0;
   padding: 0;
 
-  .timeline-icon {
-    float: left;
-
-    svg {
-      width: 16px;
-      height: 16px;
-      fill: $gray-darkest;
-      position: absolute;
-      left: 0;
-      top: 16px;
-    }
-  }
-
-  .timeline-content {
-    margin-left: 55px;
-
-    &.timeline-content-form {
-      @media (max-width: $screen-sm-max) {
-        margin-left: 0;
-      }
-    }
-  }
-
   .note-created-ago,
   .note-updated-at {
     white-space: nowrap;
@@ -51,26 +28,62 @@ ul.notes {
   }
 
   .discussion {
-    overflow: hidden;
     display: block;
     position: relative;
+
+    .diff-content {
+      overflow: visible;
+    }
   }
 
-  .note {
-    padding: $gl-padding $gl-btn-padding 0;
+  > li { // .timeline-entry
+    padding: 0;
     display: block;
     position: relative;
-    border-bottom: 1px solid $white-normal;
+    border-bottom: 0;
+
+    @include notes-media('min', $screen-sm-min) {
+      padding-left: $note-icon-gutter-width;
+    }
+
+    .timeline-entry-inner {
+      padding: $gl-padding $gl-btn-padding;
+      border-bottom: 1px solid $white-normal;
+    }
+
+    &:target,
+    &.target {
+      border-bottom: 1px solid $white-normal;
+
+      &:not(:first-child) {
+        border-top: 1px solid $white-normal;
+        margin-top: -1px;
+      }
+
+      .timeline-entry-inner {
+        border-bottom: 0;
+      }
+    }
+
+    .timeline-icon {
+      @include notes-media('min', $screen-sm-min) {
+        margin-left: -$note-icon-gutter-width;
+      }
+    }
+
+    .timeline-content {
+      margin-left: $note-icon-gutter-width;
+
+      @include notes-media('min', $screen-sm-min) {
+        margin-left: 0;
+      }
+    }
 
     &.being-posted {
       pointer-events: none;
       opacity: 0.5;
 
       .dummy-avatar {
-        display: inline-block;
-        height: 40px;
-        width: 40px;
-        border-radius: 50%;
         background-color: $kdb-border;
         border: 1px solid darken($kdb-border, 25%);
       }
@@ -82,12 +95,22 @@ ul.notes {
     }
 
     &.note-discussion {
-      &.timeline-entry {
+      .timeline-entry-inner {
         padding: $gl-padding 10px;
       }
+    }
 
-      .system-note {
-        padding: 0;
+    .editing-spinner {
+      display: none;
+    }
+
+    &.is-requesting {
+      .note-timestamp {
+        display: none;
+      }
+
+      .editing-spinner {
+        display: inline-block;
       }
     }
 
@@ -112,10 +135,11 @@ ul.notes {
       overflow-y: hidden;
 
       .note-text {
-        word-wrap: break-word;
         @include md-typography;
         // Reset ul style types since we're nested inside a ul already
         @include bulleted-list;
+        word-wrap: break-word;
+
         ul.task-list {
           ul:not(.task-list) {
             padding-left: 1.3em;
@@ -130,13 +154,13 @@ ul.notes {
 
     .note-awards {
       .js-awards-block {
-        margin-bottom: 16px;
+        margin-top: 16px;
       }
     }
 
     .note-header {
 
-      @media (max-width: $screen-xs-min) {
+      @include notes-media('max', $screen-xs-min) {
         .inline {
           display: block;
         }
@@ -165,12 +189,7 @@ ul.notes {
 
   .system-note {
     font-size: 14px;
-    padding: 0;
     clear: both;
-
-    @media (min-width: $screen-sm-min) {
-      margin-left: 65px;
-    }
 
     .note-header-info {
       padding-bottom: 0;
@@ -202,11 +221,25 @@ ul.notes {
       }
     }
 
-    .timeline-content {
-      padding: 14px 10px;
+    .timeline-icon {
+      float: left;
 
-      @media (min-width: $screen-sm-min) {
-        margin-left: 20px;
+      @include notes-media('min', $screen-sm-min) {
+        margin-left: 0;
+        width: auto;
+      }
+
+      svg {
+        width: 16px;
+        height: 16px;
+        fill: $gray-darkest;
+        margin-top: 2px;
+      }
+    }
+
+    .timeline-content {
+      @include notes-media('min', $screen-sm-min) {
+        margin-left: 30px;
       }
     }
 
@@ -232,7 +265,7 @@ ul.notes {
       }
 
       .note-text {
-        & p:first-child {
+        p:first-child {
           display: none;
         }
 
@@ -243,11 +276,6 @@ ul.notes {
 
           ul {
             margin: 3px 0 3px 16px !important;
-
-            .gfm-commit {
-              font-family: $monospace_font;
-              font-size: 12px;
-            }
           }
 
           p:first-child {
@@ -257,7 +285,7 @@ ul.notes {
           &::after {
             content: '';
             width: 100%;
-            height: 67px;
+            height: 70px;
             position: absolute;
             left: 0;
             bottom: 0;
@@ -287,10 +315,6 @@ ul.notes {
     &:hover {
       background-color: $gray-light;
     }
-  }
-
-  .diff-header > span {
-    margin-right: 10px;
   }
 
   .line_content {
@@ -355,9 +379,7 @@ ul.notes {
 }
 
 .discussion-header,
-.note-header {
-  position: relative;
-
+.note-header-info {
   a {
     color: inherit;
 
@@ -384,7 +406,7 @@ ul.notes {
   display: flex;
   justify-content: space-between;
 
-  @media (max-width: $screen-xs-max) {
+  @include notes-media('max', $screen-xs-max) {
     flex-flow: row wrap;
   }
 }
@@ -392,12 +414,26 @@ ul.notes {
 .note-header-info {
   min-width: 0;
   padding-bottom: 8px;
+
+  &.discussion {
+    padding-bottom: 0;
+  }
+}
+
+.system-note .note-header-info {
+  padding-bottom: 0;
+}
+
+.note-header-author-name {
+  @include notes-media('max', $screen-xs-max) {
+    display: none;
+  }
 }
 
 .note-headline-light {
   display: inline;
 
-  @media (max-width: $screen-xs-min) {
+  @include notes-media('max', $screen-xs-min) {
     display: block;
   }
 }
@@ -433,53 +469,85 @@ ul.notes {
 }
 
 .note-actions {
+  @include new-style-dropdown;
+
+  align-self: flex-start;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
   // For PhantomJS that does not support flex
   float: right;
   margin-left: 10px;
   color: $gray-darkest;
 
-  @media (max-width: $screen-xs-max) {
+  @include notes-media('max', $screen-xs-max) {
     float: none;
     margin-left: 0;
-  }
-
-  .note-action-button {
-    margin-left: 8px;
   }
 }
 
+.more-actions {
+  float: right; // phantomjs fallback
+  display: flex;
+  align-items: flex-end;
+
+  .tooltip {
+    white-space: nowrap;
+  }
+}
+
+.more-actions-toggle {
+  &:hover .icon,
+  &:focus .icon {
+    color: $blue-600;
+  }
+}
+
+.more-actions-dropdown {
+  width: 180px;
+  min-width: 180px;
+}
+
 .discussion-actions {
-  @media (max-width: $screen-md-max) {
+  @include notes-media('max', $screen-md-max) {
     float: none;
     margin-left: 0;
+  }
+}
 
-    .note-action-button {
-      margin-left: 0;
-    }
+.note-actions-item {
+  margin-left: 12px;
+  display: flex;
+  align-items: center;
+
+  &.more-actions {
+    // compensate for narrow icon
+    margin-left: 10px;
   }
 }
 
 .note-action-button {
-  display: inline;
-  line-height: 20px;
-
-  @media (min-width: $screen-sm-min) {
-    margin-left: 10px;
-    line-height: 24px;
-  }
+  line-height: 1;
+  padding: 0;
+  min-width: 16px;
+  color: $gray-darkest;
 
   .fa {
-    color: $gray-darkest;
     position: relative;
-    font-size: 17px;
+    font-size: 16px;
   }
+
+
 
   svg {
     height: 16px;
     width: 16px;
-    fill: $gray-darkest;
+    top: 0;
     vertical-align: text-top;
+
+    path {
+      fill: currentColor;
+    }
   }
 
   .award-control-icon-positive,
@@ -552,24 +620,37 @@ ul.notes {
 
 .note-role {
   position: relative;
-  top: -2px;
   display: inline-block;
-  padding-left: 4px;
-  padding-right: 4px;
   color: $notes-role-color;
   font-size: 12px;
   line-height: 20px;
-  border: 1px solid $border-color;
-  border-radius: $border-radius-base;
+  margin: 0 3px;
+
+  &.note-role-access {
+    padding: 0 7px;
+    border: 1px solid $border-color;
+    border-radius: $label-border-radius;
+  }
+
+  &.note-role-special {
+    text-shadow: 0 0 15px $gl-text-color-inverted;
+  }
 }
+
 
 
 /**
  * Line note button on the side of diffs
  */
 
+.line_holder .is-over:not(.no-comment-btn) {
+  .add-diff-note {
+    opacity: 1;
+  }
+}
+
 .add-diff-note {
-  display: none;
+  opacity: 0;
   margin-top: -2px;
   border-radius: 50%;
   background: $white-light;
@@ -582,17 +663,28 @@ ul.notes {
   width: 23px;
   height: 23px;
   border: 1px solid $blue-500;
-  transition: transform .1s ease-in-out;
 
   &:hover {
     background: $blue-500;
     border-color: $blue-600;
     color: $white-light;
-    transform: scale(1.15);
   }
 
   &:active {
     outline: 0;
+  }
+}
+
+.discussion-body,
+.diff-file {
+  .notes .note {
+    border-bottom: 1px solid $white-normal;
+
+    .timeline-entry-inner {
+      padding-left: $gl-padding;
+      padding-right: $gl-padding;
+      border-bottom: none;
+    }
   }
 }
 
@@ -605,17 +697,11 @@ ul.notes {
 }
 
 .disabled-comment {
-  margin-left: -$gl-padding-top;
-  margin-right: -$gl-padding-top;
   background-color: $gray-light;
   border-radius: $border-radius-base;
   border: 1px solid $border-gray-normal;
   color: $note-disabled-comment-color;
-  line-height: 200px;
-
-  .disabled-comment-text {
-    line-height: normal;
-  }
+  padding: 90px 0;
 
   a {
     color: $gl-link-color;
@@ -623,7 +709,7 @@ ul.notes {
 }
 
 .line-resolve-all-container {
-  @media (min-width: $screen-sm-min) {
+  @include notes-media('min', $screen-sm-min) {
     margin-right: 0;
     padding-left: $gl-padding;
   }
@@ -641,6 +727,12 @@ ul.notes {
     border-bottom-left-radius: 0;
   }
 
+  .btn {
+    svg path {
+      fill: $gray-darkest;
+    }
+  }
+
   .btn.discussion-create-issue-btn {
     margin-left: -4px;
     border-radius: 0;
@@ -655,17 +747,13 @@ ul.notes {
         border: 0;
       }
     }
-
-    .new-issue-for-discussion path {
-      fill: $gray-darkest;
-    }
   }
 }
 
 .line-resolve-all {
   vertical-align: middle;
   display: inline-block;
-  padding: 6px 10px;
+  padding: 5px 10px 6px;
   background-color: $gray-light;
   border: 1px solid $border-color;
   border-radius: $border-radius-default;
@@ -678,6 +766,10 @@ ul.notes {
 
   .line-resolve-btn {
     margin-right: 5px;
+
+    svg {
+      vertical-align: middle;
+    }
   }
 }
 
@@ -688,22 +780,31 @@ ul.notes {
   background-color: transparent;
   border: none;
   outline: 0;
+  color: $gray-darkest;
+  transition: color $general-hover-transition-duration $general-hover-transition-curve;
 
   &.is-disabled {
     cursor: default;
   }
 
-  &:not(.is-disabled):hover,
+  &:not(.is-disabled) {
+    &:hover,
+    &:focus {
+      color: $gl-text-green;
+    }
+  }
+
   &.is-active {
     color: $gl-text-green;
 
-    svg {
-      fill: $gl-text-green;
+    &:hover,
+    &:focus {
+      color: $gl-text-green-hover;
     }
   }
 
   svg {
-    fill: $gray-darkest;
+    fill: currentColor;
     height: 16px;
     width: 16px;
   }
@@ -714,27 +815,12 @@ ul.notes {
   }
 }
 
-.discussion-next-btn {
-  svg {
-    margin: 0;
-
-    path {
-      fill: $gray-darkest;
-    }
-  }
-}
-
-.discussion-notes .flash-container {
-  margin-bottom: 0;
+.line-resolve-text {
+  vertical-align: middle;
 }
 
 // Merge request notes in diffs
 .diff-file {
-  // Diff is side by side
-  .notes_content.parallel .note-header .note-headline-light {
-    display: block;
-    position: relative;
-  }
   // Diff is inline
   .notes_content .note-header .note-headline-light {
     display: inline-block;

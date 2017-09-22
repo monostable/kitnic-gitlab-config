@@ -21,10 +21,6 @@ class ChatNotificationService < Service
     end
   end
 
-  def can_test?
-    valid?
-  end
-
   def self.supported_events
     %w[push issue confidential_issue merge_request note tag_push
        pipeline wiki_page]
@@ -36,10 +32,10 @@ class ChatNotificationService < Service
 
   def default_fields
     [
-      { type: 'text', name: 'webhook', placeholder: "e.g. #{webhook_placeholder}" },
+      { type: 'text', name: 'webhook', placeholder: "e.g. #{webhook_placeholder}", required: true },
       { type: 'text', name: 'username', placeholder: 'e.g. GitLab' },
       { type: 'checkbox', name: 'notify_only_broken_pipelines' },
-      { type: 'checkbox', name: 'notify_only_default_branch' },
+      { type: 'checkbox', name: 'notify_only_default_branch' }
     ]
   end
 
@@ -105,9 +101,9 @@ class ChatNotificationService < Service
     when "push", "tag_push"
       ChatMessage::PushMessage.new(data)
     when "issue"
-      ChatMessage::IssueMessage.new(data) unless is_update?(data)
+      ChatMessage::IssueMessage.new(data) unless update?(data)
     when "merge_request"
-      ChatMessage::MergeMessage.new(data) unless is_update?(data)
+      ChatMessage::MergeMessage.new(data) unless update?(data)
     when "note"
       ChatMessage::NoteMessage.new(data)
     when "pipeline"
@@ -119,7 +115,7 @@ class ChatNotificationService < Service
 
   def get_channel_field(event)
     field_name = event_channel_name(event)
-    self.public_send(field_name)
+    self.public_send(field_name) # rubocop:disable GitlabSecurity/PublicSend
   end
 
   def build_event_channels
@@ -140,7 +136,7 @@ class ChatNotificationService < Service
     project.web_url
   end
 
-  def is_update?(data)
+  def update?(data)
     data[:object_attributes][:action] == 'update'
   end
 

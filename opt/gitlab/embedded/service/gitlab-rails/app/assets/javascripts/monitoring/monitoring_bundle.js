@@ -1,6 +1,10 @@
-import PrometheusGraph from './prometheus_graph';
+import Vue from 'vue';
+import Dashboard from './components/dashboard.vue';
 
-document.addEventListener('DOMContentLoaded', function onLoad() {
-  document.removeEventListener('DOMContentLoaded', onLoad, false);
-  return new PrometheusGraph();
-}, false);
+document.addEventListener('DOMContentLoaded', () => new Vue({
+  el: '#prometheus-graphs',
+  components: {
+    Dashboard,
+  },
+  render: createElement => createElement('dashboard'),
+}));

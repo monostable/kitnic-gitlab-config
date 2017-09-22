@@ -107,8 +107,7 @@ module TabHelper
   def branches_tab_class
     if current_controller?(:protected_branches) ||
         current_controller?(:branches) ||
-        current_page?(namespace_project_repository_path(@project.namespace,
-                                                        @project))
+        current_page?(project_repository_path(@project))
       'active'
     end
   end
@@ -119,5 +118,9 @@ module TabHelper
     end
 
     'active' if current_controller?('oauth/applications')
+  end
+
+  def sidebar_link(href, title: nil, css: nil, &block)
+    link_to capture(&block), href, title: (title if collapsed_sidebar?), class: css, aria: { label: title }
   end
 end

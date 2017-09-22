@@ -1,4 +1,8 @@
 /* eslint-disable func-names, space-before-function-paren, no-var, prefer-arrow-callback, no-unused-vars, one-var, one-var-declaration-per-line, vars-on-top, max-len */
+import _ from 'underscore';
+import Cookies from 'js-cookie';
+import NewNavSidebar from './new_sidebar';
+import initFlyOutNav from './fly_out_nav';
 
 (function() {
   var hideEndFade;
@@ -44,5 +48,12 @@
         }
       }
     });
+  });
+
+  $(() => {
+    const newNavSidebar = new NewNavSidebar();
+    newNavSidebar.bindEvents();
+
+    initFlyOutNav();
   });
 }).call(window);

@@ -50,6 +50,10 @@ Apart from those, here is an collection of tutorials and guides on setting up yo
 - **Articles:**
   - [Setting up GitLab CI for Android projects](https://about.gitlab.com/2016/11/30/setting-up-gitlab-ci-for-android-projects/)
 
+### Code quality analysis
+
+- [Analyze code quality with the Code Climate CLI](code_climate.md)
+
 ### Other
 
 - [Using `dpl` as deployment tool](deployment/README.md)

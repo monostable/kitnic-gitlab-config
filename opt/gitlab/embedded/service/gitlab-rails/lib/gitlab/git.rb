@@ -5,10 +5,13 @@ module Gitlab
     BRANCH_REF_PREFIX = "refs/heads/".freeze
 
     CommandError = Class.new(StandardError)
+    CommitError = Class.new(StandardError)
 
     class << self
+      include Gitlab::EncodingHelper
+
       def ref_name(ref)
-        ref.sub(/\Arefs\/(tags|heads)\//, '')
+        encode! ref.sub(/\Arefs\/(tags|heads|remotes)\//, '')
       end
 
       def branch_name(ref)

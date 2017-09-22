@@ -1,6 +1,7 @@
 /* eslint-disable func-names, space-before-function-paren, wrap-iife, no-var, no-underscore-dangle, prefer-arrow-callback, max-len, one-var, one-var-declaration-per-line, no-unused-vars, object-shorthand, comma-dangle, no-else-return, no-self-compare, consistent-return, no-param-reassign, no-shadow */
 /* global Issuable */
 /* global ListMilestone */
+import _ from 'underscore';
 
 (function() {
   this.MilestoneSelect = (function() {
@@ -8,7 +9,7 @@
       var _this, $els;
       if (currentProject != null) {
         _this = this;
-        this.currentProject = JSON.parse(currentProject);
+        this.currentProject = typeof currentProject === 'string' ? JSON.parse(currentProject) : currentProject;
       }
 
       $els = $(els);
@@ -18,12 +19,11 @@
       }
 
       $els.each(function(i, dropdown) {
-        var $block, $dropdown, $loading, $selectbox, $sidebarCollapsedValue, $value, abilityName, collapsedSidebarLabelTemplate, defaultLabel, issuableId, issueUpdateURL, milestoneLinkNoneTemplate, milestoneLinkTemplate, milestonesUrl, projectId, selectedMilestone, showAny, showNo, showUpcoming, showStarted, useId, showMenuAbove;
+        var $block, $dropdown, $loading, $selectbox, $sidebarCollapsedValue, $value, abilityName, collapsedSidebarLabelTemplate, defaultLabel, defaultNo, issuableId, issueUpdateURL, milestoneLinkNoneTemplate, milestoneLinkTemplate, milestonesUrl, projectId, selectedMilestone, selectedMilestoneDefault, showAny, showNo, showUpcoming, showStarted, useId, showMenuAbove;
         $dropdown = $(dropdown);
         projectId = $dropdown.data('project-id');
         milestonesUrl = $dropdown.data('milestones');
         issueUpdateURL = $dropdown.data('issueUpdate');
-        selectedMilestone = $dropdown.data('selected');
         showNo = $dropdown.data('show-no');
         showAny = $dropdown.data('show-any');
         showMenuAbove = $dropdown.data('showMenuAbove');
@@ -31,6 +31,7 @@
         showStarted = $dropdown.data('show-started');
         useId = $dropdown.data('use-id');
         defaultLabel = $dropdown.data('default-label');
+        defaultNo = $dropdown.data('default-no');
         issuableId = $dropdown.data('issuable-id');
         abilityName = $dropdown.data('ability-name');
         $selectbox = $dropdown.closest('.selectbox');
@@ -38,10 +39,13 @@
         $sidebarCollapsedValue = $block.find('.sidebar-collapsed-icon');
         $value = $block.find('.value');
         $loading = $block.find('.block-loading').fadeOut();
+        selectedMilestoneDefault = (showAny ? '' : null);
+        selectedMilestoneDefault = (showNo && defaultNo ? 'No Milestone' : selectedMilestoneDefault);
+        selectedMilestone = $dropdown.data('selected') || selectedMilestoneDefault;
         if (issueUpdateURL) {
           milestoneLinkTemplate = _.template('<a href="/<%- full_path %>/milestones/<%- iid %>" class="bold has-tooltip" data-container="body" title="<%- remaining %>"><%- title %></a>');
           milestoneLinkNoneTemplate = '<span class="no-value">None</span>';
-          collapsedSidebarLabelTemplate = _.template('<span class="has-tooltip" data-container="body" title="<%- remaining %>" data-placement="left"> <%- title %> </span>');
+          collapsedSidebarLabelTemplate = _.template('<span class="has-tooltip" data-container="body" title="<%- name %><br /><%- remaining %>" data-placement="left" data-html="true"> <%- title %> </span>');
         }
         return $dropdown.glDropdown({
           showMenuAbove: showMenuAbove,
@@ -86,7 +90,17 @@
               if (showMenuAbove) {
                 $dropdown.data('glDropdown').positionMenuAbove();
               }
+              $(`[data-milestone-id="${selectedMilestone}"] > a`).addClass('is-active');
             });
+          },
+          renderRow: function(milestone) {
+            return `
+              <li data-milestone-id="${milestone.name}">
+                <a href='#' class='dropdown-menu-milestone-link'>
+                  ${_.escape(milestone.title)}
+                </a>
+              </li>
+            `;
           },
           filterable: true,
           search: {
@@ -120,15 +134,24 @@
             // display:block overrides the hide-collapse rule
             return $value.css('display', '');
           },
+          opened: function(e) {
+            const $el = $(e.currentTarget);
+            if ($dropdown.hasClass('js-issue-board-sidebar')) {
+              selectedMilestone = $dropdown[0].dataset.selected || selectedMilestoneDefault;
+            }
+            $('a.is-active', $el).removeClass('is-active');
+            $(`[data-milestone-id="${selectedMilestone}"] > a`, $el).addClass('is-active');
+          },
           vue: $dropdown.hasClass('js-issue-board-sidebar'),
           clicked: function(options) {
             const { $el, e } = options;
             let selected = options.selectedObj;
-
-            var data, isIssueIndex, isMRIndex, page, boardsStore;
+            var data, isIssueIndex, isMRIndex, isSelecting, page, boardsStore;
             page = $('body').data('page');
             isIssueIndex = page === 'projects:issues:index';
             isMRIndex = (page === page && page === 'projects:merge_requests:index');
+            isSelecting = (selected.name !== selectedMilestone);
+            selectedMilestone = isSelecting ? selected.name : selectedMilestoneDefault;
             if ($dropdown.hasClass('js-filter-bulk-update') || $dropdown.hasClass('js-issuable-form-dropdown')) {
               e.preventDefault();
               return;
@@ -142,16 +165,11 @@
               boardsStore[$dropdown.data('field-name')] = selected.name;
               e.preventDefault();
             } else if ($dropdown.hasClass('js-filter-submit') && (isIssueIndex || isMRIndex)) {
-              if (selected.name != null) {
-                selectedMilestone = selected.name;
-              } else {
-                selectedMilestone = '';
-              }
               return Issuable.filterResults($dropdown.closest('form'));
             } else if ($dropdown.hasClass('js-filter-submit')) {
               return $dropdown.closest('form').submit();
             } else if ($dropdown.hasClass('js-issue-board-sidebar')) {
-              if (selected.id !== -1) {
+              if (selected.id !== -1 && isSelecting) {
                 gl.issueBoards.boardStoreIssueSet('milestone', new ListMilestone({
                   id: selected.id,
                   title: selected.name
@@ -190,6 +208,7 @@
                 if (data.milestone != null) {
                   data.milestone.full_path = _this.currentProject.full_path;
                   data.milestone.remaining = gl.utils.timeFor(data.milestone.due_date);
+                  data.milestone.name = data.milestone.title;
                   $value.html(milestoneLinkTemplate(data.milestone));
                   return $sidebarCollapsedValue.find('span').html(collapsedSidebarLabelTemplate(data.milestone));
                 } else {

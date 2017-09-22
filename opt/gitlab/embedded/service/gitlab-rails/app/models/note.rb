@@ -15,6 +15,16 @@ class Note < ActiveRecord::Base
   include IgnorableColumn
   include Editable
 
+  module SpecialRole
+    FIRST_TIME_CONTRIBUTOR = :first_time_contributor
+
+    class << self
+      def values
+        constants.map {|const| self.const_get(const)}
+      end
+    end
+  end
+
   ignore_column :original_discussion_id
 
   cache_markdown_field :note, pipeline: :note, issuable_state_filter_enabled: true
@@ -32,8 +42,11 @@ class Note < ActiveRecord::Base
   # Banzai::ObjectRenderer
   attr_accessor :user_visible_reference_count
 
-  # Attribute used to store the attributes that have ben changed by slash commands.
+  # Attribute used to store the attributes that have been changed by quick actions.
   attr_accessor :commands_changes
+
+  # A special role that may be displayed on issuable's discussions
+  attr_accessor :special_role
 
   default_value_for :system, false
 
@@ -41,13 +54,13 @@ class Note < ActiveRecord::Base
   participant :author
 
   belongs_to :project
-  belongs_to :noteable, polymorphic: true, touch: true
+  belongs_to :noteable, polymorphic: true, touch: true # rubocop:disable Cop/PolymorphicAssociations
   belongs_to :author, class_name: "User"
   belongs_to :updated_by, class_name: "User"
   belongs_to :last_edited_by, class_name: 'User'
 
-  has_many :todos, dependent: :destroy
-  has_many :events, as: :target, dependent: :destroy
+  has_many :todos, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+  has_many :events, as: :target, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
   has_one :system_note_metadata
 
   delegate :gfm_reference, :local_reference, to: :noteable
@@ -77,20 +90,20 @@ class Note < ActiveRecord::Base
 
   # Scopes
   scope :for_commit_id, ->(commit_id) { where(noteable_type: "Commit", commit_id: commit_id) }
-  scope :system, ->{ where(system: true) }
-  scope :user, ->{ where(system: false) }
-  scope :common, ->{ where(noteable_type: ["", nil]) }
-  scope :fresh, ->{ order(created_at: :asc, id: :asc) }
-  scope :updated_after, ->(time){ where('updated_at > ?', time) }
-  scope :inc_author_project, ->{ includes(:project, :author) }
-  scope :inc_author, ->{ includes(:author) }
+  scope :system, -> { where(system: true) }
+  scope :user, -> { where(system: false) }
+  scope :common, -> { where(noteable_type: ["", nil]) }
+  scope :fresh, -> { order(created_at: :asc, id: :asc) }
+  scope :updated_after, ->(time) { where('updated_at > ?', time) }
+  scope :inc_author_project, -> { includes(:project, :author) }
+  scope :inc_author, -> { includes(:author) }
   scope :inc_relations_for_view, -> do
     includes(:project, :author, :updated_by, :resolved_by, :award_emoji, :system_note_metadata)
   end
 
-  scope :diff_notes, ->{ where(type: %w(LegacyDiffNote DiffNote)) }
-  scope :new_diff_notes, ->{ where(type: 'DiffNote') }
-  scope :non_diff_notes, ->{ where(type: ['Note', 'DiscussionNote', nil]) }
+  scope :diff_notes, -> { where(type: %w(LegacyDiffNote DiffNote)) }
+  scope :new_diff_notes, -> { where(type: 'DiffNote') }
+  scope :non_diff_notes, -> { where(type: ['Note', 'DiscussionNote', nil]) }
 
   scope :with_associations, -> do
     # FYI noteable cannot be loaded for LegacyDiffNote for commits
@@ -111,7 +124,7 @@ class Note < ActiveRecord::Base
     end
 
     def discussions(context_noteable = nil)
-      Discussion.build_collection(fresh, context_noteable)
+      Discussion.build_collection(all.includes(:noteable).fresh, context_noteable)
     end
 
     def find_discussion(discussion_id)
@@ -125,22 +138,25 @@ class Note < ActiveRecord::Base
       groups = {}
 
       diff_notes.fresh.discussions.each do |discussion|
-        if discussion.active?(diff_refs)
-          discussions = groups[discussion.line_code] ||= []
-        elsif diff_refs && discussion.created_at_diff?(diff_refs)
-          discussions = groups[discussion.original_line_code] ||= []
-        end
+        line_code = discussion.line_code_in_diffs(diff_refs)
 
-        discussions << discussion if discussions
+        if line_code
+          discussions = groups[line_code] ||= []
+          discussions << discussion
+        end
       end
 
       groups
     end
 
     def count_for_collection(ids, type)
-      user.select('noteable_id', 'COUNT(*) as count').
-        group(:noteable_id).
-        where(noteable_type: type, noteable_id: ids)
+      user.select('noteable_id', 'COUNT(*) as count')
+        .group(:noteable_id)
+        .where(noteable_type: type, noteable_id: ids)
+    end
+
+    def has_special_role?(role, note)
+      note.special_role == role
     end
   end
 
@@ -191,7 +207,7 @@ class Note < ActiveRecord::Base
   # override to return commits, which are not active record
   def noteable
     if for_commit?
-      project.commit(commit_id)
+      @commit ||= project.commit(commit_id)
     else
       super
     end
@@ -205,6 +221,22 @@ class Note < ActiveRecord::Base
   #        For more information visit http://api.rubyonrails.org/classes/ActiveRecord/Associations/ClassMethods.html#label-Polymorphic+Associations
   def noteable_type=(noteable_type)
     super(noteable_type.to_s.classify.constantize.base_class.to_s)
+  end
+
+  def special_role=(role)
+    raise "Role is undefined, #{role} not found in #{SpecialRole.values}" unless SpecialRole.values.include?(role)
+
+    @special_role = role
+  end
+
+  def has_special_role?(role)
+    self.class.has_special_role?(role, self)
+  end
+
+  def specialize_for_first_contribution!(noteable)
+    return unless noteable.author_id == self.author_id
+
+    self.special_role = Note::SpecialRole::FIRST_TIME_CONTRIBUTOR
   end
 
   def editable?
@@ -300,6 +332,17 @@ class Note < ActiveRecord::Base
     end
   end
 
+  def expire_etag_cache
+    return unless noteable&.discussions_rendered_on_frontend?
+
+    key = Gitlab::Routing.url_helpers.project_noteable_notes_path(
+      project,
+      target_type: noteable_type.underscore,
+      target_id: noteable_id
+    )
+    Gitlab::EtagCaching::Store.new.touch(key)
+  end
+
   private
 
   def keep_around_commit
@@ -326,17 +369,5 @@ class Note < ActiveRecord::Base
 
   def set_discussion_id
     self.discussion_id ||= discussion_class.discussion_id(self)
-  end
-
-  def expire_etag_cache
-    return unless for_issue?
-
-    key = Gitlab::Routing.url_helpers.namespace_project_noteable_notes_path(
-      noteable.project.namespace,
-      noteable.project,
-      target_type: noteable_type.underscore,
-      target_id: noteable.id
-    )
-    Gitlab::EtagCaching::Store.new.touch(key)
   end
 end

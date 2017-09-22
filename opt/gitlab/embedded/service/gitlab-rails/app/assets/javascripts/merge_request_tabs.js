@@ -1,12 +1,12 @@
 /* eslint-disable no-new, class-methods-use-this */
-/* global Breakpoints */
 /* global Flash */
 /* global notes */
 
 import Cookies from 'js-cookie';
-import './breakpoints';
 import './flash';
 import BlobForkSuggestion from './blob/blob_fork_suggestion';
+import initChangesDropdown from './init_changes_dropdown';
+import bp from './breakpoints';
 
 /* eslint-disable max-len */
 // MergeRequestTabs
@@ -133,7 +133,7 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
         this.destroyPipelinesView();
       } else if (this.isDiffAction(action)) {
         this.loadDiff($target.attr('href'));
-        if (Breakpoints.get().getBreakpointSize() !== 'lg') {
+        if (bp.getBreakpointSize() !== 'lg') {
           this.shrinkView();
         }
         if (this.diffViewType() === 'parallel') {
@@ -144,7 +144,9 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
         this.resetViewContainer();
         this.mountPipelinesView();
       } else {
-        this.expandView();
+        if (bp.getBreakpointSize() !== 'xs') {
+          this.expandView();
+        }
         this.resetViewContainer();
         this.destroyPipelinesView();
       }
@@ -155,7 +157,10 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
 
     scrollToElement(container) {
       if (location.hash) {
-        const offset = -$('.js-tabs-affix').outerHeight();
+        const offset = 0 - (
+          $('.navbar-gitlab').outerHeight() +
+          $('.js-tabs-affix').outerHeight()
+        );
         const $el = $(`${container} ${location.hash}:not(.match)`);
         if ($el.length) {
           $.scrollTo($el[0], { offset });
@@ -165,9 +170,8 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
 
     // Activate a tab based on the current action
     activateTab(action) {
-      const activate = action === 'show' ? 'notes' : action;
       // important note: the .tab('show') method triggers 'shown.bs.tab' event itself
-      $(`.merge-request-tabs a[data-action='${activate}']`).tab('show');
+      $(`.merge-request-tabs a[data-action='${action}']`).tab('show');
     }
 
     // Replaces the current Merge Request-specific action in the URL with a new one
@@ -182,7 +186,7 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
     //   location.pathname # => "/namespace/project/merge_requests/1/diffs"
     //
     //   location.pathname # => "/namespace/project/merge_requests/1/diffs"
-    //   setCurrentAction('notes')
+    //   setCurrentAction('show')
     //   location.pathname # => "/namespace/project/merge_requests/1"
     //
     //   location.pathname # => "/namespace/project/merge_requests/1/diffs"
@@ -191,13 +195,13 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
     //
     // Returns the new URL String
     setCurrentAction(action) {
-      this.currentAction = action === 'show' ? 'notes' : action;
+      this.currentAction = action;
 
-      // Remove a trailing '/commits' '/diffs' '/pipelines' '/new' '/new/diffs'
-      let newState = location.pathname.replace(/\/(commits|diffs|pipelines|new|new\/diffs)(\.html)?\/?$/, '');
+      // Remove a trailing '/commits' '/diffs' '/pipelines'
+      let newState = location.pathname.replace(/\/(commits|diffs|pipelines)(\.html)?\/?$/, '');
 
       // Append the new action if we're on a tab other than 'notes'
-      if (this.currentAction !== 'notes') {
+      if (this.currentAction !== 'show' && this.currentAction !== 'new') {
         newState += `/${this.currentAction}`;
       }
 
@@ -233,15 +237,24 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
     }
 
     mountPipelinesView() {
-      this.commitPipelinesTable = new gl.CommitPipelinesTable().$mount();
+      const pipelineTableViewEl = document.querySelector('#commit-pipeline-table-view');
+      const CommitPipelinesTable = gl.CommitPipelinesTable;
+      this.commitPipelinesTable = new CommitPipelinesTable({
+        propsData: {
+          endpoint: pipelineTableViewEl.dataset.endpoint,
+          helpPagePath: pipelineTableViewEl.dataset.helpPagePath,
+          autoDevopsHelpPath: pipelineTableViewEl.dataset.helpAutoDevopsPath,
+        },
+      }).$mount();
+
       // $mount(el) replaces the el with the new rendered component. We need it in order to mount
       // it everytime this tab is clicked - https://vuejs.org/v2/api/#vm-mount
-      document.querySelector('#commit-pipeline-table-view')
-        .appendChild(this.commitPipelinesTable.$el);
+      pipelineTableViewEl.appendChild(this.commitPipelinesTable.$el);
     }
 
     loadDiff(source) {
       if (this.diffsLoaded) {
+        document.dispatchEvent(new CustomEvent('scroll'));
         return;
       }
 
@@ -254,6 +267,8 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
         success: (data) => {
           const $container = $('#diffs');
           $container.html(data.html);
+
+          initChangesDropdown();
 
           if (typeof gl.diffNotesCompileComponents !== 'undefined') {
             gl.diffNotesCompileComponents();
@@ -284,8 +299,8 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
           // Scroll any linked note into view
           // Similar to `toggler_behavior` in the discussion tab
           const hash = window.gl.utils.getLocationHash();
-          const anchor = hash && $container.find(`[id="${hash}"]`);
-          if (anchor) {
+          const anchor = hash && $container.find(`.note[id="${hash}"]`);
+          if (anchor && anchor.length > 0) {
             const notesContent = anchor.closest('.notes_content');
             const lineType = notesContent.hasClass('new') ? 'new' : 'old';
             notes.toggleDiffNote({
@@ -294,6 +309,7 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
               forceShow: true,
             });
             anchor[0].scrollIntoView();
+            window.gl.utils.handleLocationHash();
             // We have multiple elements on the page with `#note_xxx`
             // (discussion and diff tabs) and `:target` only applies to the first
             anchor.addClass('target');
@@ -373,10 +389,18 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
 
     initAffix() {
       const $tabs = $('.js-tabs-affix');
+      const $fixedNav = $('.navbar-gitlab');
 
       // Screen space on small screens is usually very sparse
       // So we dont affix the tabs on these
-      if (Breakpoints.get().getBreakpointSize() === 'xs' || !$tabs.length) return;
+      if (bp.getBreakpointSize() === 'xs' || !$tabs.length) return;
+
+      /**
+        If the browser does not support position sticky, it returns the position as static.
+        If the browser does support sticky, then we allow the browser to handle it, if not
+        then we default back to Bootstraps affix
+      **/
+      if ($tabs.css('position') !== 'static') return;
 
       const $diffTabs = $('#diff-notes-app');
 
@@ -384,7 +408,7 @@ import BlobForkSuggestion from './blob/blob_fork_suggestion';
         .affix({
           offset: {
             top: () => (
-              $diffTabs.offset().top - $tabs.height()
+              $diffTabs.offset().top - $tabs.height() - $fixedNav.height()
             ),
           },
         })

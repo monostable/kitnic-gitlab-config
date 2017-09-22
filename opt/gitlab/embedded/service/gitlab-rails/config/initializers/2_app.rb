@@ -4,5 +4,5 @@ module Gitlab
   end
 
   VERSION  = File.read(Rails.root.join("VERSION")).strip.freeze
-REVISION = 'cbde95c'
+REVISION = 'bbf5c73'
 end

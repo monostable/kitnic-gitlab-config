@@ -116,6 +116,8 @@
 }
 
 .manage-labels-list {
+  @include new-style-dropdown;
+
   > li:not(.empty-message):not(.is-not-draggable) {
     background-color: $white-light;
     cursor: move;
@@ -138,6 +140,7 @@
     .fa {
       font-size: 18px;
       vertical-align: middle;
+      pointer-events: none;
     }
 
     &:hover {
@@ -278,5 +281,9 @@
 
 .label-link {
   display: inline-block;
-  vertical-align: text-top;
+  vertical-align: top;
+
+  .label {
+    vertical-align: inherit;
+  }
 }

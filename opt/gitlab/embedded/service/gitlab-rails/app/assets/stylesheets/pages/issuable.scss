@@ -5,13 +5,39 @@
   margin-right: auto;
 }
 
+.is-confidential {
+  color: $orange-600;
+  background-color: $orange-50;
+  border-radius: $border-radius-default;
+  padding: 5px;
+  margin: 0 3px 0 -4px;
+}
+
+.is-not-confidential {
+  border-radius: $border-radius-default;
+  padding: 5px;
+  margin: 0 3px 0 -4px;
+}
+
+.confidentiality {
+  .is-not-confidential {
+    margin: auto;
+  }
+
+  .is-confidential {
+    margin: auto;
+  }
+}
+
 .limit-container-width {
   .detail-page-header,
   .page-content-header,
   .commit-box,
   .info-well,
   .commit-ci-menu,
-  .files-changed {
+  .files-changed-inner,
+  .limited-header-width,
+  .limited-width-notes {
     @extend .fixed-width-container;
   }
 
@@ -55,10 +81,11 @@
     border: 1px solid $white-normal;
     padding: 5px;
     max-height: calc(100vh - 100px);
+    max-width: 100%;
   }
 
   .emoji-block {
-    padding: 10px 0 4px;
+    padding: 10px 0;
   }
 }
 
@@ -193,13 +220,25 @@
 
 .right-sidebar {
   position: absolute;
-  top: $header-height;
+  top: $new-navbar-height;
   bottom: 0;
   right: 0;
   transition: width .3s;
   background: $gray-light;
-  padding: 10px 20px;
   z-index: 200;
+  overflow: hidden;
+
+  .issuable-sidebar {
+    width: calc(100% + 100px);
+    height: calc(100% - #{$new-navbar-height});
+    overflow-y: scroll;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  &.affix-top .issuable-sidebar {
+    height: 100%;
+  }
 
   &.right-sidebar-expanded {
     width: $gutter_width;
@@ -213,12 +252,26 @@
       }
     }
 
+    .issuable-sidebar {
+      padding: 0 20px;
+    }
+
+    .issuable-sidebar-header {
+      padding-top: 10px;
+    }
+
+    &:not(.issue-boards-sidebar):not([data-signed-in]):not([data-always-show-toggle]) {
+      .issuable-sidebar-header {
+        display: none;
+      }
+    }
+
     .assign-yourself .btn-link {
       padding-left: 0;
     }
 
     .light {
-      font-weight: normal;
+      font-weight: $gl-font-weight-normal;
     }
 
     .no-value {
@@ -232,6 +285,10 @@
     .gutter-toggle {
       margin-top: 7px;
       border-left: 1px solid $border-gray-normal;
+    }
+
+    .title .gutter-toggle {
+      margin-top: 0;
     }
 
     .assignee .avatar {
@@ -249,7 +306,7 @@
       display: block;
       margin-top: 4px;
       font-size: 13px;
-      font-weight: normal;
+      font-weight: $gl-font-weight-normal;
     }
 
     .hide-expanded {
@@ -266,11 +323,10 @@
     }
 
     width: $gutter_collapsed_width;
-    padding-top: 0;
+    padding: 0;
 
     .block {
       width: $gutter_collapsed_width - 2px;
-      margin-left: -19px;
       padding: 15px 0 0;
       border-bottom: none;
       overflow: hidden;
@@ -297,9 +353,17 @@
       margin-bottom: 10px;
       color: $issuable-sidebar-color;
 
+      svg {
+        fill: $issuable-sidebar-color;
+      }
+
       &:hover,
       &:hover .todo-undone {
         color: $gl-text-color;
+
+        svg {
+          fill: $gl-text-color;
+        }
       }
 
       span {
@@ -319,13 +383,9 @@
         display: none;
       }
 
-      .avatar:hover,
-      .avatar-counter:hover {
-        border-color: $issuable-sidebar-color;
-      }
-
       .avatar-counter:hover {
         color: $issuable-sidebar-color;
+        border-color: $issuable-sidebar-color;
       }
 
       .btn-clipboard {
@@ -389,6 +449,12 @@
         }
       }
     }
+
+    .milestone-title span {
+      @include str-truncated(100%);
+      display: block;
+      margin: 0 4px;
+    }
   }
 
   a {
@@ -413,13 +479,39 @@
     padding-top: 6px;
   }
 
-  .open .dropdown-menu {
+  .dropdown-menu {
     width: 100%;
   }
 }
 
+.with-performance-bar .right-sidebar {
+  top: $new-navbar-height + $performance-bar-height;
+
+  .issuable-sidebar {
+    height: calc(100% - #{$new-navbar-height} - #{$performance-bar-height});
+  }
+}
+
+.sidebar-move-issue-dropdown {
+  @include new-style-dropdown;
+}
+
+.sidebar-move-issue-confirmation-button {
+  width: 100%;
+
+  &.is-loading {
+    .sidebar-move-issue-confirmation-loading-icon {
+      display: inline-block;
+    }
+  }
+}
+
+.sidebar-move-issue-confirmation-loading-icon {
+  display: none;
+}
+
 .detail-page-description {
-  padding: 16px 0 0;
+  padding: 16px 0;
 
   small {
     color: $gray-darkest;
@@ -429,7 +521,8 @@
 .edited-text {
   color: $gray-darkest;
   display: block;
-  margin: 0 0 16px;
+  margin: 16px 0 0;
+  font-size: 85%;
 
   .author_link {
     color: $gray-darkest;
@@ -530,6 +623,8 @@
 }
 
 .issuable-actions {
+  @include new-style-dropdown;
+
   padding-top: 10px;
 
   @media (min-width: $screen-sm-min) {
@@ -573,7 +668,38 @@
     .issue-info-container {
       -webkit-flex: 1;
       flex: 1;
+      display: flex;
       padding-right: $gl-padding;
+
+      .issue-main-info {
+        flex: 1 auto;
+        margin-right: 10px;
+      }
+
+      .issuable-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        flex: 1 0 auto;
+
+        .controls {
+          margin-bottom: 2px;
+          line-height: 20px;
+          padding: 0;
+        }
+
+        .issue-updated-at {
+          line-height: 20px;
+        }
+      }
+
+      @media(max-width: $screen-xs-max) {
+        .issuable-meta {
+          .controls li {
+            margin-right: 0;
+          }
+        }
+      }
     }
 
     .issue-check {
@@ -583,6 +709,30 @@
 
       .selected_issue {
         vertical-align: text-top;
+      }
+    }
+
+    .issuable-milestone,
+    .issuable-info,
+    .task-status,
+    .issuable-updated-at {
+      font-weight: $gl-font-weight-normal;
+      color: $gl-text-color-secondary;
+
+      a {
+        color: $gl-text-color;
+
+        .fa {
+          color: $gl-text-color-secondary;
+        }
+      }
+    }
+
+    @media(max-width: $screen-md-max) {
+      .task-status,
+      .issuable-due-date,
+      .project-ref-path {
+        display: none;
       }
     }
   }
@@ -715,5 +865,28 @@
         display: none;
       }
     }
+  }
+}
+
+.issuable-close-button,
+.issuable-close-toggle {
+  @include transition(border-color, color);
+}
+
+.issuable-close-dropdown {
+  .dropdown-menu {
+    min-width: 270px;
+    left: auto;
+    right: 0;
+  }
+
+  .description {
+    .text {
+      margin: 0;
+    }
+  }
+
+  .dropdown-toggle > .icon {
+    margin: 0 3px;
   }
 }

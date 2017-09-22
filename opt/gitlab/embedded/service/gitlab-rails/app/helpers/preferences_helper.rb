@@ -40,6 +40,10 @@ module PreferencesHelper
     ]
   end
 
+  def user_application_theme
+    @user_application_theme ||= Gitlab::Themes.for_user(current_user).css_class
+  end
+
   def user_color_scheme
     Gitlab::ColorSchemes.for_user(current_user).css_class
   end
@@ -49,7 +53,7 @@ module PreferencesHelper
 
     user_view = current_user.project_view
 
-    if @project.feature_available?(:repository, current_user)
+    if can?(current_user, :download_code, @project)
       user_view
     elsif user_view == "activity"
       "activity"

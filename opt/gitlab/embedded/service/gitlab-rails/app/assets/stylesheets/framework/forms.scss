@@ -32,7 +32,7 @@ label {
   }
 
   &.label-light {
-    font-weight: 600;
+    font-weight: $gl-font-weight-bold;
   }
 }
 
@@ -73,7 +73,7 @@ label {
   margin-right: 0;
 
   .control-label {
-    font-weight: bold;
+    font-weight: $gl-font-weight-bold;
     padding-top: 4px;
   }
 
@@ -125,10 +125,11 @@ label {
 .select-wrapper {
   position: relative;
 
-  .fa-caret-down {
+  .fa-chevron-down {
     position: absolute;
+    font-size: 10px;
     right: 10px;
-    top: 10px;
+    top: 12px;
     color: $gray-darkest;
     pointer-events: none;
   }
@@ -138,6 +139,12 @@ label {
   padding-left: 10px;
   padding-right: 10px;
   -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+
+  &::-ms-expand {
+    display: none;
+  }
 }
 
 .form-control-inline {
@@ -148,8 +155,9 @@ label {
   margin-top: 35px;
 }
 
-.form-group .control-label {
-  font-weight: normal;
+.form-group .control-label,
+.form-group .control-label-full-width {
+  font-weight: $gl-font-weight-normal;
 }
 
 .form-control::-webkit-input-placeholder {

@@ -2,27 +2,27 @@
 /* global BoardService */
 /* global Flash */
 
+import _ from 'underscore';
 import Vue from 'vue';
 import VueResource from 'vue-resource';
 import FilteredSearchBoards from './filtered_search_boards';
 import eventHub from './eventhub';
-
-require('./models/issue');
-require('./models/label');
-require('./models/list');
-require('./models/milestone');
-require('./models/assignee');
-require('./stores/boards_store');
-require('./stores/modal_store');
-require('./services/board_service');
-require('./mixins/modal_mixins');
-require('./mixins/sortable_default_options');
-require('./filters/due_date_filters');
-require('./components/board');
-require('./components/board_sidebar');
-require('./components/new_list_dropdown');
-require('./components/modal/index');
-require('../vue_shared/vue_resource_interceptor');
+import './models/issue';
+import './models/label';
+import './models/list';
+import './models/milestone';
+import './models/assignee';
+import './stores/boards_store';
+import './stores/modal_store';
+import './services/board_service';
+import './mixins/modal_mixins';
+import './mixins/sortable_default_options';
+import './filters/due_date_filters';
+import './components/board';
+import './components/board_sidebar';
+import './components/new_list_dropdown';
+import './components/modal/index';
+import '../vue_shared/vue_resource_interceptor';
 
 Vue.use(VueResource);
 
@@ -53,7 +53,8 @@ $(() => {
     data: {
       state: Store.state,
       loading: true,
-      endpoint: $boardApp.dataset.endpoint,
+      boardsEndpoint: $boardApp.dataset.boardsEndpoint,
+      listsEndpoint: $boardApp.dataset.listsEndpoint,
       boardId: $boardApp.dataset.boardId,
       disabled: $boardApp.dataset.disabled === 'true',
       issueLinkBase: $boardApp.dataset.issueLinkBase,
@@ -68,9 +69,16 @@ $(() => {
       },
     },
     created () {
-      gl.boardService = new BoardService(this.endpoint, this.bulkUpdatePath, this.boardId);
+      gl.boardService = new BoardService({
+        boardsEndpoint: this.boardsEndpoint,
+        listsEndpoint: this.listsEndpoint,
+        bulkUpdatePath: this.bulkUpdatePath,
+        boardId: this.boardId,
+      });
+      Store.rootPath = this.boardsEndpoint;
 
       this.filterManager = new FilteredSearchBoards(Store.filter, true);
+      this.filterManager.setup();
 
       // Listen for updateTokens event
       eventHub.$on('updateTokens', this.updateTokens);
@@ -81,13 +89,16 @@ $(() => {
     mounted () {
       Store.disabled = this.disabled;
       gl.boardService.all()
+        .then(response => response.json())
         .then((resp) => {
-          resp.json().forEach((board) => {
+          resp.forEach((board) => {
             const list = Store.addList(board, this.defaultAvatar);
 
             if (list.type === 'closed') {
               list.position = Infinity;
               list.label = { description: 'Shows all closed issues. Moving an issue to this list closes it' };
+            } else if (list.type === 'backlog') {
+              list.position = -1;
             }
           });
 
@@ -95,7 +106,8 @@ $(() => {
 
           Store.addBlankState();
           this.loading = false;
-        }).catch(() => new Flash('An error occurred. Please try again.'));
+        })
+        .catch(() => new Flash('An error occurred. Please try again.'));
     },
     methods: {
       updateTokens() {
@@ -107,19 +119,21 @@ $(() => {
   gl.IssueBoardsSearch = new Vue({
     el: document.getElementById('js-add-list'),
     data: {
-      filters: Store.state.filters
+      filters: Store.state.filters,
     },
     mounted () {
       gl.issueBoards.newListDropdownInit();
-    }
+    },
   });
 
   gl.IssueBoardsModalAddBtn = new Vue({
     mixins: [gl.issueBoards.ModalMixins],
     el: document.getElementById('js-add-issues-btn'),
-    data: {
-      modal: ModalStore.store,
-      store: Store.state,
+    data() {
+      return {
+        modal: ModalStore.store,
+        store: Store.state,
+      };
     },
     watch: {
       disabled() {
@@ -128,7 +142,10 @@ $(() => {
     },
     computed: {
       disabled() {
-        return !this.store.lists.filter(list => list.type !== 'blank' && list.type !== 'done').length;
+        if (!this.store) {
+          return true;
+        }
+        return !this.store.lists.filter(list => !list.preset).length;
       },
       tooltipTitle() {
         if (this.disabled) {
@@ -140,7 +157,7 @@ $(() => {
     },
     methods: {
       updateTooltip() {
-        const $tooltip = $(this.$el);
+        const $tooltip = $(this.$refs.addIssuesButton);
 
         this.$nextTick(() => {
           if (this.disabled) {
@@ -160,16 +177,19 @@ $(() => {
       this.updateTooltip();
     },
     template: `
-      <button
-        class="btn btn-create pull-right prepend-left-10"
-        type="button"
-        data-placement="bottom"
-        :class="{ 'disabled': disabled }"
-        :title="tooltipTitle"
-        :aria-disabled="disabled"
-        @click="openModal">
-        Add issues
-      </button>
+      <div class="board-extra-actions">
+        <button
+          class="btn btn-create prepend-left-10"
+          type="button"
+          data-placement="bottom"
+          ref="addIssuesButton"
+          :class="{ 'disabled': disabled }"
+          :title="tooltipTitle"
+          :aria-disabled="disabled"
+          @click="openModal">
+          Add issues
+        </button>
+      </div>
     `,
   });
 });

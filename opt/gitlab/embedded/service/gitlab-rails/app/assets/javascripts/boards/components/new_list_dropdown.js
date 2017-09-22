@@ -1,5 +1,6 @@
 /* eslint-disable comma-dangle, func-names, no-new, space-before-function-paren, one-var,
    promise/catch-or-return */
+import _ from 'underscore';
 
 window.gl = window.gl || {};
 window.gl.issueBoards = window.gl.issueBoards || {};
@@ -26,7 +27,7 @@ gl.issueBoards.newListDropdownInit = () => {
 
     $this.glDropdown({
       data(term, callback) {
-        $.get($this.attr('data-labels'))
+        $.get($this.attr('data-list-labels-path'))
           .then((resp) => {
             callback(resp);
           });

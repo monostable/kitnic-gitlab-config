@@ -1,6 +1,7 @@
-import AjaxCache from '~/lib/utils/ajax_cache';
-import '~/flash'; /* global Flash */
+import AjaxCache from '../lib/utils/ajax_cache';
+import '../flash'; /* global Flash */
 import FilteredSearchContainer from './container';
+import UsersCache from '../lib/utils/users_cache';
 
 class FilteredSearchVisualTokens {
   static getLastVisualTokenBeforeInput() {
@@ -36,18 +37,55 @@ class FilteredSearchVisualTokens {
     }
   }
 
-  static createVisualTokenElementHTML() {
+  static createVisualTokenElementHTML(canEdit = true) {
+    let removeTokenMarkup = '';
+    if (canEdit) {
+      removeTokenMarkup = `
+        <div class="remove-token" role="button">
+          <i class="fa fa-close"></i>
+        </div>
+      `;
+    }
+
     return `
       <div class="selectable" role="button">
         <div class="name"></div>
         <div class="value-container">
           <div class="value"></div>
-          <div class="remove-token" role="button">
-            <i class="fa fa-close"></i>
-          </div>
+          ${removeTokenMarkup}
         </div>
       </div>
     `;
+  }
+
+  static setTokenStyle(tokenContainer, backgroundColor, textColor) {
+    const token = tokenContainer;
+
+    // Labels with linear gradient should not override default background color
+    if (backgroundColor.indexOf('linear-gradient') === -1) {
+      token.style.backgroundColor = backgroundColor;
+    }
+
+    token.style.color = textColor;
+
+    if (textColor === '#FFFFFF') {
+      const removeToken = token.querySelector('.remove-token');
+      removeToken.classList.add('inverted');
+    }
+
+    return token;
+  }
+
+  static preprocessLabel(labelsEndpoint, labels) {
+    let processed = labels;
+
+    if (!labels.preprocessed) {
+      processed = gl.DropdownUtils.duplicateLabelPreprocessing(labels);
+      AjaxCache.override(labelsEndpoint, processed);
+      processed.preprocessed = true;
+    }
+
+    return processed;
   }
 
   static updateLabelTokenColor(tokenValueContainer, tokenValue) {
@@ -56,41 +94,87 @@ class FilteredSearchVisualTokens {
     const labelsEndpoint = `${baseEndpoint}/labels.json`;
 
     return AjaxCache.retrieve(labelsEndpoint)
-    .then((labels) => {
-      const matchingLabel = (labels || []).find(label => `~${gl.DropdownUtils.getEscapedText(label.title)}` === tokenValue);
+      .then(FilteredSearchVisualTokens.preprocessLabel.bind(null, labelsEndpoint))
+      .then((labels) => {
+        const matchingLabel = (labels || []).find(label => `~${gl.DropdownUtils.getEscapedText(label.title)}` === tokenValue);
 
-      if (!matchingLabel) {
-        return;
-      }
+        if (!matchingLabel) {
+          return;
+        }
 
-      const tokenValueStyle = tokenValueContainer.style;
-      tokenValueStyle.backgroundColor = matchingLabel.color;
-      tokenValueStyle.color = matchingLabel.text_color;
+        FilteredSearchVisualTokens
+          .setTokenStyle(tokenValueContainer, matchingLabel.color, matchingLabel.text_color);
+      })
+      .catch(() => new Flash('An error occurred while fetching label colors.'));
+  }
 
-      if (matchingLabel.text_color === '#FFFFFF') {
-        const removeToken = tokenValueContainer.querySelector('.remove-token');
-        removeToken.classList.add('inverted');
-      }
-    })
-    .catch(() => new Flash('An error occurred while fetching label colors.'));
+  static updateUserTokenAppearance(tokenValueContainer, tokenValueElement, tokenValue) {
+    if (tokenValue === 'none') {
+      return Promise.resolve();
+    }
+
+    const username = tokenValue.replace(/^@/, '');
+    return UsersCache.retrieve(username)
+      .then((user) => {
+        if (!user) {
+          return;
+        }
+
+        /* eslint-disable no-param-reassign */
+        tokenValueContainer.dataset.originalValue = tokenValue;
+        tokenValueElement.innerHTML = `
+          <img class="avatar s20" src="${user.avatar_url}" alt="${user.name}'s avatar">
+          ${user.name}
+        `;
+        /* eslint-enable no-param-reassign */
+      })
+      // ignore error and leave username in the search bar
+      .catch(() => { });
+  }
+
+  static updateEmojiTokenAppearance(tokenValueContainer, tokenValueElement, tokenValue) {
+    const container = tokenValueContainer;
+    const element = tokenValueElement;
+
+    return import(/* webpackChunkName: 'emoji' */ '../emoji')
+      .then((Emoji) => {
+        if (!Emoji.isEmojiNameValid(tokenValue)) {
+          return;
+        }
+
+        container.dataset.originalValue = tokenValue;
+        element.innerHTML = Emoji.glEmojiTag(tokenValue);
+      })
+      // ignore error and leave emoji name in the search bar
+      .catch(() => { });
   }
 
   static renderVisualTokenValue(parentElement, tokenName, tokenValue) {
     const tokenValueContainer = parentElement.querySelector('.value-container');
-    tokenValueContainer.querySelector('.value').innerText = tokenValue;
+    const tokenValueElement = tokenValueContainer.querySelector('.value');
+    tokenValueElement.innerText = tokenValue;
 
-    if (tokenName.toLowerCase() === 'label') {
+    const tokenType = tokenName.toLowerCase();
+    if (tokenType === 'label') {
       FilteredSearchVisualTokens.updateLabelTokenColor(tokenValueContainer, tokenValue);
+    } else if ((tokenType === 'author') || (tokenType === 'assignee')) {
+      FilteredSearchVisualTokens.updateUserTokenAppearance(
+        tokenValueContainer, tokenValueElement, tokenValue,
+      );
+    } else if (tokenType === 'my-reaction') {
+      FilteredSearchVisualTokens.updateEmojiTokenAppearance(
+        tokenValueContainer, tokenValueElement, tokenValue,
+      );
     }
   }
 
-  static addVisualTokenElement(name, value, isSearchTerm) {
+  static addVisualTokenElement(name, value, isSearchTerm, canEdit) {
     const li = document.createElement('li');
     li.classList.add('js-visual-token');
     li.classList.add(isSearchTerm ? 'filtered-search-term' : 'filtered-search-token');
 
     if (value) {
-      li.innerHTML = FilteredSearchVisualTokens.createVisualTokenElementHTML();
+      li.innerHTML = FilteredSearchVisualTokens.createVisualTokenElementHTML(canEdit);
       FilteredSearchVisualTokens.renderVisualTokenValue(li, name, value);
     } else {
       li.innerHTML = '<div class="name"></div>';
@@ -114,20 +198,20 @@ class FilteredSearchVisualTokens {
     }
   }
 
-  static addFilterVisualToken(tokenName, tokenValue) {
+  static addFilterVisualToken(tokenName, tokenValue, canEdit) {
     const { lastVisualToken, isLastVisualTokenValid }
       = FilteredSearchVisualTokens.getLastVisualTokenBeforeInput();
     const addVisualTokenElement = FilteredSearchVisualTokens.addVisualTokenElement;
 
     if (isLastVisualTokenValid) {
-      addVisualTokenElement(tokenName, tokenValue, false);
+      addVisualTokenElement(tokenName, tokenValue, false, canEdit);
     } else {
       const previousTokenName = lastVisualToken.querySelector('.name').innerText;
       const tokensContainer = FilteredSearchContainer.container.querySelector('.tokens-container');
       tokensContainer.removeChild(lastVisualToken);
 
       const value = tokenValue || tokenName;
-      addVisualTokenElement(previousTokenName, value, false);
+      addVisualTokenElement(previousTokenName, value, false, canEdit);
     }
   }
 
@@ -145,6 +229,12 @@ class FilteredSearchVisualTokens {
     const { lastVisualToken } = FilteredSearchVisualTokens.getLastVisualTokenBeforeInput();
 
     if (!lastVisualToken) return '';
+
+    const valueContainer = lastVisualToken.querySelector('.value-container');
+    const originalValue = valueContainer && valueContainer.dataset.originalValue;
+    if (originalValue) {
+      return originalValue;
+    }
 
     const value = lastVisualToken.querySelector('.value');
     const name = lastVisualToken.querySelector('.name');
@@ -198,16 +288,27 @@ class FilteredSearchVisualTokens {
     const inputLi = input.parentElement;
     tokenContainer.replaceChild(inputLi, token);
 
-    const name = token.querySelector('.name');
-    const value = token.querySelector('.value');
+    const nameElement = token.querySelector('.name');
+    let value;
 
-    if (token.classList.contains('filtered-search-token') && value) {
-      FilteredSearchVisualTokens.addFilterVisualToken(name.innerText);
-      input.value = value.innerText;
-    } else {
-      // token is a search term
-      input.value = name.innerText;
+    if (token.classList.contains('filtered-search-token')) {
+      FilteredSearchVisualTokens.addFilterVisualToken(nameElement.innerText);
+
+      const valueContainerElement = token.querySelector('.value-container');
+      value = valueContainerElement.dataset.originalValue;
+
+      if (!value) {
+        const valueElement = valueContainerElement.querySelector('.value');
+        value = valueElement.innerText;
+      }
     }
+
+    // token is a search term
+    if (!value) {
+      value = nameElement.innerText;
+    }
+
+    input.value = value;
 
     // Opens dropdown
     const inputEvent = new Event('input');

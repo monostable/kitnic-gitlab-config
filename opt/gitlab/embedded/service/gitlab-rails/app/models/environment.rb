@@ -6,7 +6,8 @@ class Environment < ActiveRecord::Base
 
   belongs_to :project, required: true, validate: true
 
-  has_many :deployments, dependent: :destroy
+  has_many :deployments, dependent: :destroy # rubocop:disable Cop/ActiveRecordDependent
+
   has_one :last_deployment, -> { order('deployments.id DESC') }, class_name: 'Deployment'
 
   before_validation :nullify_external_url
@@ -40,11 +41,12 @@ class Environment < ActiveRecord::Base
   scope :stopped, -> { with_state(:stopped) }
   scope :order_by_last_deployed_at, -> do
     max_deployment_id_sql =
-      Deployment.select(Deployment.arel_table[:id].maximum).
-      where(Deployment.arel_table[:environment_id].eq(arel_table[:id])).
-      to_sql
+      Deployment.select(Deployment.arel_table[:id].maximum)
+      .where(Deployment.arel_table[:environment_id].eq(arel_table[:id]))
+      .to_sql
     order(Gitlab::Database.nulls_first_order("(#{max_deployment_id_sql})", 'ASC'))
   end
+  scope :in_review_folder, -> { where(environment_type: "review") }
 
   state_machine :state, initial: :available do
     event :start do
@@ -57,12 +59,16 @@ class Environment < ActiveRecord::Base
 
     state :available
     state :stopped
+
+    after_transition do |environment|
+      environment.expire_etag_cache
+    end
   end
 
   def predefined_variables
     [
       { key: 'CI_ENVIRONMENT_NAME', value: name, public: true },
-      { key: 'CI_ENVIRONMENT_SLUG', value: slug, public: true },
+      { key: 'CI_ENVIRONMENT_SLUG', value: slug, public: true }
     ]
   end
 
@@ -77,12 +83,7 @@ class Environment < ActiveRecord::Base
   def set_environment_type
     names = name.split('/')
 
-    self.environment_type =
-      if names.many?
-        names.first
-      else
-        nil
-      end
+    self.environment_type = names.many? ? names.first : nil
   end
 
   def includes_commit?(commit)
@@ -96,7 +97,7 @@ class Environment < ActiveRecord::Base
   end
 
   def update_merge_request_metrics?
-    (environment_type || name) == "production"
+    folder_name == "production"
   end
 
   def first_deployment_for(commit)
@@ -109,7 +110,7 @@ class Environment < ActiveRecord::Base
   end
 
   def ref_path
-    "refs/environments/#{Shellwords.shellescape(name)}"
+    "refs/#{Repository::REF_ENVIRONMENTS}/#{Shellwords.shellescape(name)}"
   end
 
   def formatted_external_url
@@ -150,7 +151,17 @@ class Environment < ActiveRecord::Base
   end
 
   def metrics
-    project.monitoring_service.metrics(self) if has_metrics?
+    project.monitoring_service.environment_metrics(self) if has_metrics?
+  end
+
+  def has_additional_metrics?
+    project.prometheus_service.present? && available? && last_deployment.present?
+  end
+
+  def additional_metrics
+    if has_additional_metrics?
+      project.prometheus_service.additional_environment_metrics(self)
+    end
   end
 
   # An environment name is not necessarily suitable for use in URLs, DNS
@@ -194,6 +205,22 @@ class Environment < ActiveRecord::Base
     return unless public_path
 
     [external_url, public_path].join('/')
+  end
+
+  def expire_etag_cache
+    Gitlab::EtagCaching::Store.new.tap do |store|
+      store.touch(etag_cache_key)
+    end
+  end
+
+  def etag_cache_key
+    Gitlab::Routing.url_helpers.project_environments_path(
+      project,
+      format: :json)
+  end
+
+  def folder_name
+    self.environment_type || self.name
   end
 
   private

@@ -1,5 +1,7 @@
 - page_title 'Labels'
+
 = render "groups/head_issues"
+
 
 .top-area.adjust
   .nav-text
@@ -7,8 +9,7 @@
 
   .nav-controls
     - if can?(current_user, :admin_label, @group)
-      = link_to new_group_label_path(@group), class: "btn btn-new" do
-        New label
+      = link_to "New label", new_group_label_path(@group), class: "btn btn-new"
 
 .labels
   .other-labels

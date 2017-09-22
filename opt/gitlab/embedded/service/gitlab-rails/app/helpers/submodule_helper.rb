@@ -1,5 +1,5 @@
 module SubmoduleHelper
-  include Gitlab::ShellAdapter
+  extend self
 
   VALID_SUBMODULE_PROTOCOLS = %w[http https git ssh].freeze
 
@@ -7,8 +7,24 @@ module SubmoduleHelper
   def submodule_links(submodule_item, ref = nil, repository = @repository)
     url = repository.submodule_url_for(ref, submodule_item.path)
 
+    if url == '.' || url == './'
+      url = File.join(Gitlab.config.gitlab.url, @project.full_path)
+    end
+
     if url =~ /([^\/:]+)\/([^\/]+(?:\.git)?)\Z/
       namespace, project = $1, $2
+      gitlab_hosts = [Gitlab.config.gitlab.url,
+                      Gitlab.config.gitlab_shell.ssh_path_prefix]
+
+      gitlab_hosts.each do |host|
+        if url.start_with?(host)
+          namespace, _, project = url.sub(host, '').rpartition('/')
+          break
+        end
+      end
+
+      namespace.sub!(/\A\//, '')
+      project.rstrip!
       project.sub!(/\.git\z/, '')
 
       if self_url?(url, namespace, project)
@@ -43,7 +59,7 @@ module SubmoduleHelper
     return true if url_no_dotgit == [Gitlab.config.gitlab.url, '/', namespace, '/',
                                      project].join('')
     url_with_dotgit = url_no_dotgit + '.git'
-    url_with_dotgit == gitlab_shell.url_to_repo([namespace, '/', project].join(''))
+    url_with_dotgit == Gitlab::Shell.new.url_to_repo([namespace, '/', project].join(''))
   end
 
   def relative_self_url?(url)
@@ -57,6 +73,7 @@ module SubmoduleHelper
   end
 
   def relative_self_links(url, commit)
+    url.rstrip!
     # Map relative links to a namespace and project
     # For example:
     # ../bar.git -> same namespace, repo bar

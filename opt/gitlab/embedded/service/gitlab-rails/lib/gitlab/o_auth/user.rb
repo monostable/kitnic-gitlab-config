@@ -12,6 +12,7 @@ module Gitlab
 
       def initialize(auth_hash)
         self.auth_hash = auth_hash
+        update_profile if sync_profile_from_provider?
       end
 
       def persisted?
@@ -31,7 +32,7 @@ module Gitlab
 
         block_after_save = needs_blocking?
 
-        gl_user.save!
+        Users::UpdateService.new(gl_user).execute!
 
         gl_user.block if block_after_save
 
@@ -100,12 +101,16 @@ module Gitlab
         # Look for a corresponding person with same uid in any of the configured LDAP providers
         Gitlab::LDAP::Config.providers.each do |provider|
           adapter = Gitlab::LDAP::Adapter.new(provider)
-          @ldap_person = Gitlab::LDAP::Person.find_by_uid(auth_hash.uid, adapter)
-          # The `uid` might actually be a DN. Try it next.
-          @ldap_person ||= Gitlab::LDAP::Person.find_by_dn(auth_hash.uid, adapter)
+          @ldap_person = find_ldap_person(auth_hash, adapter)
           break if @ldap_person
         end
         @ldap_person
+      end
+
+      def find_ldap_person(auth_hash, adapter)
+        by_uid = Gitlab::LDAP::Person.find_by_uid(auth_hash.uid, adapter)
+        # The `uid` might actually be a DN. Try it next.
+        by_uid || Gitlab::LDAP::Person.find_by_dn(auth_hash.uid, adapter)
       end
 
       def ldap_config
@@ -161,17 +166,48 @@ module Gitlab
         username ||= auth_hash.username
         email ||= auth_hash.email
 
+        valid_username = ::Namespace.clean_path(username)
+
+        uniquify = Uniquify.new
+        valid_username = uniquify.string(valid_username) { |s| !DynamicPathValidator.valid_user_path?(s) }
+
         name = auth_hash.name
-        name = ::Namespace.clean_path(username) if name.strip.empty?
+        name = valid_username if name.strip.empty?
 
         {
           name:                       name,
-          username:                   ::Namespace.clean_path(username),
+          username:                   valid_username,
           email:                      email,
           password:                   auth_hash.password,
           password_confirmation:      auth_hash.password,
           password_automatically_set: true
         }
+      end
+
+      def sync_profile_from_provider?
+        providers = Gitlab.config.omniauth.sync_profile_from_provider
+
+        if providers.is_a?(Array)
+          providers.include?(auth_hash.provider)
+        else
+          providers
+        end
+      end
+
+      def update_profile
+        user_synced_attributes_metadata = gl_user.user_synced_attributes_metadata || gl_user.build_user_synced_attributes_metadata
+
+        UserSyncedAttributesMetadata::SYNCABLE_ATTRIBUTES.each do |key|
+          if auth_hash.has_attribute?(key) && gl_user.sync_attribute?(key)
+            gl_user[key] = auth_hash.public_send(key) # rubocop:disable GitlabSecurity/PublicSend
+            user_synced_attributes_metadata.set_attribute_synced(key, true)
+          else
+            user_synced_attributes_metadata.set_attribute_synced(key, false)
+          end
+        end
+
+        user_synced_attributes_metadata.provider = auth_hash.provider
+        gl_user.user_synced_attributes_metadata = user_synced_attributes_metadata
       end
 
       def log

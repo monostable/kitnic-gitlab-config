@@ -2,7 +2,6 @@ class MergeRequestEntity < IssuableEntity
   include RequestAwareEntity
 
   expose :in_progress_merge_commit_sha
-  expose :locked_at
   expose :merge_commit_sha
   expose :merge_error
   expose :merge_params
@@ -29,9 +28,10 @@ class MergeRequestEntity < IssuableEntity
 
   expose :merge_commit_sha
   expose :merge_commit_message
-  expose :head_pipeline, with: PipelineEntity, as: :pipeline
+  expose :head_pipeline, with: PipelineDetailsEntity, as: :pipeline
 
   # Booleans
+  expose :merge_ongoing?, as: :merge_ongoing
   expose :work_in_progress?, as: :work_in_progress
   expose :source_branch_exists?, as: :source_branch_exists
   expose :mergeable_discussions_state?, as: :mergeable_discussions_state
@@ -39,6 +39,7 @@ class MergeRequestEntity < IssuableEntity
   expose :commits_count
   expose :cannot_be_merged?, as: :has_conflicts
   expose :can_be_merged?, as: :can_be_merged
+  expose :remove_source_branch?, as: :remove_source_branch
 
   expose :project_archived do |merge_request|
     merge_request.project.archived?
@@ -96,6 +97,16 @@ class MergeRequestEntity < IssuableEntity
     presenter(merge_request).target_branch_commits_path
   end
 
+  expose :target_branch_tree_path do |merge_request|
+    presenter(merge_request).target_branch_tree_path
+  end
+
+  expose :new_blob_path do |merge_request|
+    if can?(current_user, :push_code, merge_request.project)
+      project_new_blob_path(merge_request.project, merge_request.source_branch)
+    end
+  end
+
   expose :conflict_resolution_path do |merge_request|
     presenter(merge_request).conflict_resolution_path
   end
@@ -125,30 +136,19 @@ class MergeRequestEntity < IssuableEntity
   end
 
   expose :email_patches_path do |merge_request|
-    namespace_project_merge_request_path(merge_request.project.namespace,
-                                         merge_request.project,
-                                         merge_request,
-                                         format: :patch)
+    project_merge_request_path(merge_request.project, merge_request, format: :patch)
   end
 
   expose :plain_diff_path do |merge_request|
-    namespace_project_merge_request_path(merge_request.project.namespace,
-                                         merge_request.project,
-                                         merge_request,
-                                         format: :diff)
+    project_merge_request_path(merge_request.project, merge_request, format: :diff)
   end
 
   expose :status_path do |merge_request|
-    namespace_project_merge_request_path(merge_request.target_project.namespace,
-                                         merge_request.target_project,
-                                         merge_request,
-                                         format: :json)
+    project_merge_request_path(merge_request.target_project, merge_request, format: :json)
   end
 
   expose :ci_environments_status_path do |merge_request|
-    ci_environments_status_namespace_project_merge_request_path(merge_request.project.namespace,
-                                                                merge_request.project,
-                                                                merge_request)
+    ci_environments_status_project_merge_request_path(merge_request.project, merge_request)
   end
 
   expose :merge_commit_message_with_description do |merge_request|
@@ -164,9 +164,7 @@ class MergeRequestEntity < IssuableEntity
   end
 
   expose :commit_change_content_path do |merge_request|
-    commit_change_content_namespace_project_merge_request_path(merge_request.project.namespace,
-                                                               merge_request.project,
-                                                               merge_request)
+    commit_change_content_project_merge_request_path(merge_request.project, merge_request)
   end
 
   private

@@ -1,10 +1,12 @@
 #cycle-analytics {
+  @include new-style-dropdown;
+
   max-width: 1000px;
   margin: 24px auto 0;
   position: relative;
 
   .landing {
-    margin-top: 10px;
+    margin-top: 0;
 
     .inner-content {
       white-space: normal;
@@ -24,9 +26,9 @@
 
   .col-headers {
     ul {
+      @include clearfix;
       margin: 0;
       padding: 0;
-      @include clearfix;
     }
 
     li {
@@ -66,7 +68,7 @@
     }
 
     .stage-name {
-      font-weight: 600;
+      font-weight: $gl-font-weight-bold;
     }
   }
 
@@ -91,7 +93,7 @@
       .header {
         font-size: 30px;
         line-height: 38px;
-        font-weight: normal;
+        font-weight: $gl-font-weight-normal;
         margin: 0;
       }
 
@@ -128,7 +130,7 @@
         &.title {
           line-height: 19px;
           font-size: 14px;
-          font-weight: 600;
+          font-weight: $gl-font-weight-bold;
           color: $gl-text-color;
         }
 
@@ -189,8 +191,8 @@
     }
 
     li {
-      list-style-type: none;
       @include clearfix;
+      list-style-type: none;
     }
 
     .stage-nav-item {
@@ -209,7 +211,7 @@
         box-shadow: inset 2px 0 0 0 $active-item-blue;
 
         .stage-name {
-          font-weight: 600;
+          font-weight: $gl-font-weight-bold;
         }
       }
 
@@ -281,11 +283,11 @@
   }
 
   .stage-event-item {
+    @include clearfix;
     list-style-type: none;
     padding: 0 0 $gl-padding;
     margin: 0 $gl-padding $gl-padding;
     border-bottom: 1px solid $gray-darker;
-    @include clearfix;
 
     &:last-child {
       border-bottom: none;
@@ -307,9 +309,9 @@
       &.issue-title,
       &.commit-title,
       &.merge-merquest-title {
+        @include text-overflow();
         max-width: 100%;
         display: block;
-        @include text-overflow();
 
         a {
           color: $gl-text-color;
@@ -387,7 +389,7 @@
         padding: 0 3px 0 0;
       }
 
-      .branch-name {
+      .ref-name {
         color: $black;
         display: inline-block;
         max-width: 180px;
@@ -398,11 +400,11 @@
         vertical-align: top;
       }
 
-      .short-sha {
+      .commit-sha {
         color: $gl-link-color;
         line-height: 1.3;
         vertical-align: top;
-        font-weight: normal;
+        font-weight: $gl-font-weight-normal;
       }
 
       .fa {

@@ -1,4 +1,5 @@
 - @no_container = true
+- add_to_breadcrumbs "Compare Revisions", project_compare_index_path(@project)
 - page_title "#{params[:from]}...#{params[:to]}"
 = render "projects/commits/head"
 
@@ -16,9 +17,9 @@
           There isn't anything to compare.
         %p.slead
           - if params[:to] == params[:from]
-            %span.label-branch= params[:from]
+            %span.ref-name= params[:from]
             and
-            %span.label-branch= params[:to]
+            %span.ref-name= params[:to]
             are the same.
           - else
             You'll need to use different branch names to get a valid comparison.
